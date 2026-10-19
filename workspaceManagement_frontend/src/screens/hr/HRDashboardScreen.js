@@ -95,10 +95,10 @@ export const HRDashboardScreen = ({ navigation }) => {
         <View style={[styles.cycleBanner, { backgroundColor: palette.primary }]}>
           <View style={styles.bannerRow}>
             <Icon name="calendar" size={16} color="#FFFFFF" />
-            <Text style={styles.bannerTitle}>PAYROLL OPS CYCLE: {monthLabel} • Live Synced</Text>
+            <Text style={styles.bannerTitle}>PAYROLL CYCLE: {monthLabel}</Text>
           </View>
           <Text style={styles.bannerSub}>
-            Standard {salaryConfig.workingDaysPerPeriod} billable days • Deduction rate enforced
+            {salaryConfig.workingDaysPerPeriod} working days this month
           </Text>
         </View>
 

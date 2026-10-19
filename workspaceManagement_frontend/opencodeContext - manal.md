@@ -500,6 +500,9 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
     buttons gone entirely from `SalaryEstimatesScreen` (card now ends at the ESTIMATED NET
     PAYOUT box); dropped `cardActionsRow`/`lockBtn`/`lockBtnText`/`outlineBtn`/`outlineBtnText`
     styles. Grep-verified zero matches for both labels.
+  - **HR dashboard banner simplified** — top card now reads "PAYROLL CYCLE: {Month Year}" +
+    "{N} working days this month" (was "PAYROLL OPS CYCLE … • Live Synced" / "Standard N
+    billable days • Deduction rate enforced").
 - **2026-10-19** — **Manager demo data removed; every manager screen now shows only the real team.**
   - `seedData.js`: `SEED_ATTENDANCE`, `SEED_LEAVES`, `SEED_TASKS`, `SEED_REQUIREMENTS` emptied to `[]`
     (the four were only read by the Redux slices' initial state; `storageService` first-run seed now
