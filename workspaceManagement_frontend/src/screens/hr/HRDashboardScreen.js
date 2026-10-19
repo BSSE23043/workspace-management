@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
@@ -16,6 +15,7 @@ import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { loadTickets } from '../../services/ticketService';
 import { loadLeaves, approveLeave, rejectLeave } from '../../services/leaveService';
 import { loadAttendance } from '../../services/attendanceService';
+import { loadSalaryConfig } from '../../services/salaryService';
 import { PUNCH_DUTY_ROLES, isWeekday } from '../../utils/attendanceStats';
 
 export const HRDashboardScreen = ({ navigation }) => {
@@ -23,19 +23,20 @@ export const HRDashboardScreen = ({ navigation }) => {
   const palette = getRolePalette('HR');
   const { currentUser } = useAuth();
 
-  const salaryConfig = useSelector((state) => state.salary.companyWide);
-
-  // Tickets, leaves & punch logs live in AsyncStorage — load on demand
-  // (mount + focus) so the KPIs, leave requests card and recent activity
-  // always match the stored state.
+  // Tickets, leaves, punch logs & the salary policy live in AsyncStorage —
+  // load on demand (mount + focus) so the KPIs, leave requests card, policy
+  // card and recent activity always match the stored state.
   const [tickets, setTickets] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [salaryConfig, setSalaryConfig] = useState({});
   useEffect(() => {
     const load = async () => {
       setTickets(await loadTickets());
       setLeaves(await loadLeaves());
       setLogs(await loadAttendance());
+      const storedSalary = await loadSalaryConfig();
+      setSalaryConfig(storedSalary.companyWide);
     };
     load();
     const unsubscribe = navigation.addListener('focus', load);

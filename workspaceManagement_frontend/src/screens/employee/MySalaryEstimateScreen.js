@@ -7,13 +7,13 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { loadLeaves } from '../../services/leaveService';
 import { loadAttendance } from '../../services/attendanceService';
+import { loadSalaryConfig } from '../../services/salaryService';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
 import { elapsedWorkdaysInMonth, getUnexcusedAbsentDays, attendanceTrackingStart } from '../../utils/attendanceStats';
 
@@ -22,18 +22,19 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  // Salary policy stays in Redux; leaves & punch logs come from AsyncStorage.
-  // They are loaded on mount and refreshed on focus so paid-leave days and
-  // present days below always match the stored state. isDataLoaded waits for
-  // that first read so no deduction flashes before the data is known.
-  const salaryConfig = useSelector((state) => state.salary);
+  // Nothing salary-related stays in Redux anymore — the salary policy, leaves
+  // and punch logs all come from AsyncStorage, loaded on mount and refreshed
+  // on focus so paid-leave days and present days below always match the stored
+  // state. isDataLoaded waits for that first read so no deduction flashes.
   const [leaves, setLeaves] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [salaryConfig, setSalaryConfig] = useState({ companyWide: {}, overrides: {} });
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const load = async () => {
       setLeaves(await loadLeaves());
       setLogs(await loadAttendance());
+      setSalaryConfig(await loadSalaryConfig());
       setIsDataLoaded(true);
     };
     load();

@@ -46,7 +46,8 @@ export const SEED_ATTENDANCE = [];
 // up at runtime by real users:
 //   - employees submit HR tickets (services/ticketService.createTicket)
 //   - HR configures company-wide policy + per-employee overrides
-//     (salarySlice.updateCompanySalaryConfig / updateEmployeeSalaryOverride)
+//     (services/salaryService.updateCompanySalaryConfig /
+//      updateEmployeeSalaryOverride)
 // The companyWide salary block below is functional payroll POLICY defaults
 // (rates only), not demo records. Fixed allowances were removed entirely —
 // they no longer exist in config and no longer count toward net pay.

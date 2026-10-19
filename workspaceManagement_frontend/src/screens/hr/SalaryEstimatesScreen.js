@@ -8,12 +8,12 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { loadLeaves } from '../../services/leaveService';
 import { loadAttendance } from '../../services/attendanceService';
+import { loadSalaryConfig } from '../../services/salaryService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
@@ -33,25 +33,25 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
     })();
   }, []);
 
-  // Leaves & punch logs are NOT in Redux anymore — read them from AsyncStorage
-  // on mount and refresh on focus so present/paid-leave days in every estimate
-  // stay accurate. isDataLoaded waits for that first read so no wrong totals
-  // flash meanwhile.
+  // Leaves, punch logs & the salary policy are NOT in Redux anymore — read
+  // them from AsyncStorage on mount and refresh on focus so present/paid-leave
+  // days and the applied rates in every estimate stay accurate. isDataLoaded
+  // waits for that first read so no wrong totals flash meanwhile.
   const [leaves, setLeaves] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [salaryConfig, setSalaryConfig] = useState({ companyWide: {}, overrides: {} });
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const load = async () => {
       setLeaves(await loadLeaves());
       setLogs(await loadAttendance());
+      setSalaryConfig(await loadSalaryConfig());
       setIsDataLoaded(true);
     };
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
   }, [navigation]);
-
-  const salaryConfig = useSelector((state) => state.salary);
 
   const [selectedUserId, setSelectedUserId] = useState('');
   const [isCalculating, setIsCalculating] = useState(false);
