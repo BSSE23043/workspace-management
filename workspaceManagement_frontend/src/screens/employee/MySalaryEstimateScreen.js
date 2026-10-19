@@ -13,6 +13,7 @@ import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
+import { elapsedWorkdaysInMonth, getUnexcusedAbsentDays, attendanceTrackingStart } from '../../utils/attendanceStats';
 
 export const MySalaryEstimateScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
@@ -36,19 +37,28 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
     (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
   ).length;
 
-  // Real approved leave days this month, split into paid / unpaid
+  // Real approved leave days this month — all approved leave is paid
+  // (there is no unpaid-leave category since the Manal3 payroll update)
   const myMonthLeaves = leaves.filter(
     (l) =>
       l.userId === currentUser?.id &&
       l.status === 'APPROVED' &&
       (l.startDate || '').startsWith(monthPrefix)
   );
-  const paidLeaveDays = myMonthLeaves
-    .filter((l) => l.isPaid !== false)
-    .reduce((acc, l) => acc + (l.daysCount || 1), 0);
-  const unpaidLeaveDays = myMonthLeaves
-    .filter((l) => l.isPaid === false)
-    .reduce((acc, l) => acc + (l.daysCount || 1), 0);
+  const paidLeaveDays = myMonthLeaves.reduce((acc, l) => acc + (l.daysCount || 1), 0);
+
+  // No punch on an elapsed working day (and not on approved leave) = absence.
+  // Same absence derivation as the dashboard and the HR salary screens.
+  const todayStr = new Date().toISOString().split('T')[0];
+  const absentDays = getUnexcusedAbsentDays({
+    workdaysElapsed: elapsedWorkdaysInMonth(
+      monthPrefix,
+      todayStr,
+      attendanceTrackingStart(logs, todayStr)
+    ),
+    presentDays,
+    paidLeaveDays,
+  });
 
   // Company policy, or this employee's override if HR configured one
   const cfg = salaryConfig.overrides[currentUser?.id] || salaryConfig.companyWide;
@@ -58,21 +68,9 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
     workingDaysPerPeriod: cfg.workingDaysPerPeriod,
     presentDays,
     paidLeaveDays,
-    unpaidLeaveDays,
-    absentDays: 0,
+    absentDays,
     deductionPerAbsentDay: cfg.deductionPerAbsentDay,
-    deductionPerUnpaidLeaveDay: cfg.deductionPerUnpaidLeaveDay,
   });
-  const estimate = useMemo(() => {
-    return calculateSalaryEstimate({
-      baseSalary: 150000,
-      workingDaysPerPeriod: 22,
-      presentDays: activeCycle.presentDays,
-      paidLeaveDays: activeCycle.paidLeaveDays,
-      absentDays: activeCycle.absentDays,
-      deductionPerAbsentDay: 5000,
-    });
-  }, [activeCycle]);
 
   const handleDownloadPDF = () => {
     Alert.alert(
@@ -130,13 +128,15 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Absence Notice */}
-        <View style={styles.absenceAlert}>
-          <Icon name="alert-triangle" size={16} color="#DC2626" />
-          <Text style={styles.absenceAlertText}>
-            Absent: {estimate.unexcusedAbsentDays} Day (-{formatCurrency(estimate.absentDeductionTotal)}) • No Check-In
-          </Text>
-        </View>
+        {/* Absence Notice (only when there is a real absence this month) */}
+        {estimate.unexcusedAbsentDays > 0 && (
+          <View style={styles.absenceAlert}>
+            <Icon name="alert-triangle" size={16} color="#DC2626" />
+            <Text style={styles.absenceAlertText}>
+              Absent: {estimate.unexcusedAbsentDays} Day (-{formatCurrency(estimate.absentDeductionTotal)}) • No Check-In
+            </Text>
+          </View>
+        )}
 
         {/* Itemized Policy Deductions */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
@@ -151,13 +151,13 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
             </Text>
           </View>
 
-          {unpaidLeaveDays > 0 ? (
+          {estimate.unexcusedAbsentDays > 0 ? (
             <View style={styles.itemRow}>
               <Text style={[styles.itemLabel, { color: palette.textSecondary }]}>
-                {`Unpaid Leave (${unpaidLeaveDays} Day${unpaidLeaveDays > 1 ? 's' : ''} @ ${estimate.rateUnpaidLeave.toLocaleString()} PKR / d):`}
+                {`Absent (${estimate.unexcusedAbsentDays} Day${estimate.unexcusedAbsentDays > 1 ? 's' : ''} @ ${formatCurrency(estimate.rateAbsent)} / d):`}
               </Text>
               <Text style={[styles.itemVal, { color: '#DC2626' }]}>
-                -{formatCurrency(estimate.unpaidLeaveDeductionTotal)}
+                -{formatCurrency(estimate.absentDeductionTotal)}
               </Text>
             </View>
           ) : (
@@ -165,12 +165,6 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
               No deductions applied so far this month.
             </Text>
           )}
-              Absent ({estimate.unexcusedAbsentDays} Day @ {formatCurrency(estimate.rateAbsent)} / d):
-            </Text>
-            <Text style={[styles.itemVal, { color: '#DC2626' }]}>
-              -{formatCurrency(estimate.absentDeductionTotal)}
-            </Text>
-          </View>
         </View>
 
         {/* HR Ticket Link */}
@@ -256,6 +250,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
     fontWeight: '500',
+  },
+  absenceAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 8,
+    padding: 10,
+    gap: 8,
+    marginBottom: 14,
+  },
+  absenceAlertText: {
+    color: '#DC2626',
+    fontSize: 11,
+    fontWeight: '700',
+    flex: 1,
   },
   card: {
     borderRadius: 12,
