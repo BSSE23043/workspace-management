@@ -7,32 +7,36 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import { approveLeave, rejectLeave } from '../../store/slices/leavesSlice';
+import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { loadTickets } from '../../services/ticketService';
+import { loadLeaves, approveLeave, rejectLeave } from '../../services/leaveService';
+import { loadAttendance } from '../../services/attendanceService';
+import { loadSalaryConfig } from '../../services/salaryService';
 import { PUNCH_DUTY_ROLES, isWeekday } from '../../utils/attendanceStats';
 
 export const HRDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
   const { currentUser } = useAuth();
-  const dispatch = useDispatch();
 
-  const { logs } = useSelector((state) => state.attendance);
-  const { leaves } = useSelector((state) => state.leaves);
-  const salaryConfig = useSelector((state) => state.salary.companyWide);
-
-  // Tickets live in AsyncStorage — load on demand (mount + focus) so the
-  // ticket KPIs and recent activity always match the stored state.
+  // Tickets, leaves, punch logs & the salary policy live in AsyncStorage —
+  // load on demand (mount + focus) so the KPIs, leave requests card, policy
+  // card and recent activity always match the stored state.
   const [tickets, setTickets] = useState([]);
+  const [leaves, setLeaves] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [salaryConfig, setSalaryConfig] = useState({});
   useEffect(() => {
     const load = async () => {
       setTickets(await loadTickets());
+      setLeaves(await loadLeaves());
+      setLogs(await loadAttendance());
+      const storedSalary = await loadSalaryConfig();
+      setSalaryConfig(storedSalary.companyWide);
     };
     load();
     const unsubscribe = navigation.addListener('focus', load);
@@ -98,6 +102,20 @@ export const HRDashboardScreen = ({ navigation }) => {
     (l) => l.status === 'CORRECTED_PRESENT' || l.statusCategory === 'HR CORRECTED RECORDS'
   ).length;
   const recentTickets = tickets.slice(0, 4);
+
+  // HR decides on an employee leave request — same approve/reject logic the
+  // old Redux actions had, now saved to AsyncStorage and reflected locally.
+  const handleHrApprove = async (leave) => {
+    const next = await approveLeave({ leaveId: leave.id, comment: 'Approved by HR' });
+    setLeaves(next);
+    Alert.alert('Leave Approved', `${leave.userName}'s leave request approved.`);
+  };
+
+  const handleHrReject = async (leave) => {
+    const next = await rejectLeave({ leaveId: leave.id, comment: 'Rejected by HR' });
+    setLeaves(next);
+    Alert.alert('Leave Rejected', `${leave.userName}'s leave request rejected.`);
+  };
 
   const pad = (n) => String(n).padStart(2, '0');
 
@@ -182,19 +200,13 @@ export const HRDashboardScreen = ({ navigation }) => {
                     <View style={styles.leaveActions}>
                       <TouchableOpacity
                         style={[styles.leaveApproveBtn, { backgroundColor: '#16A34A' }]}
-                        onPress={() => {
-                          dispatch(approveLeave({ leaveId: leave.id, comment: 'Approved by HR' }));
-                          Alert.alert('Leave Approved', `${leave.userName}'s leave request approved.`);
-                        }}
+                        onPress={() => handleHrApprove(leave)}
                       >
                         <Text style={styles.leaveBtnText}>Approve</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.leaveRejectBtn}
-                        onPress={() => {
-                          dispatch(rejectLeave({ leaveId: leave.id, comment: 'Rejected by HR' }));
-                          Alert.alert('Leave Rejected', `${leave.userName}'s leave request rejected.`);
-                        }}
+                        onPress={() => handleHrReject(leave)}
                       >
                         <Text style={styles.leaveRejectText}>Reject</Text>
                       </TouchableOpacity>

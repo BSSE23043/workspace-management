@@ -6,12 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { loadTasks } from '../../services/taskService';
 import { loadRequirements } from '../../services/requirementService';
+import { loadAttendance } from '../../services/attendanceService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
@@ -20,20 +20,21 @@ export const ManagerDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
-  const { logs } = useSelector((state) => state.attendance);
-
-  // Tasks & requirements are NOT in Redux anymore — they are read from
-  // AsyncStorage when this screen mounts, and again every time it regains
+  // Tasks, requirements & punch logs are NOT in Redux anymore — they are read
+  // from AsyncStorage when this screen mounts, and again every time it regains
   // focus (tab screens stay mounted, so focus is what keeps data fresh).
   const [tasks, setTasks] = useState([]);
   const [requirements, setRequirements] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const loadData = async () => {
       const storedTasks = await loadTasks();
       const storedRequirements = await loadRequirements();
+      const storedLogs = await loadAttendance();
       setTasks(storedTasks);
       setRequirements(storedRequirements);
+      setLogs(storedLogs);
       setIsDataLoaded(true);
     };
     loadData();

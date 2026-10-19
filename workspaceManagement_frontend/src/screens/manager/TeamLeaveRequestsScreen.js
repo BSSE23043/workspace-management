@@ -8,22 +8,34 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { approveLeave, rejectLeave } from '../../store/slices/leavesSlice';
+import { approveLeave, rejectLeave, loadLeaves } from '../../services/leaveService';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
 export const TeamLeaveRequestsScreen = ({ navigation }) => {
-  const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
-  const { leaves } = useSelector((state) => state.leaves);
   const [selectedTab, setSelectedTab] = useState('PENDING');
+
+  // Leaves are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // refresh on focus so newly submitted team requests appear here.
+  // isDataLoaded waits for that first read so no empty tabs flash meanwhile.
+  const [leaves, setLeaves] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setLeaves(await loadLeaves());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
 
   // The team = employees whose reporting line points to this manager.
   const [users, setUsers] = useState([]);
@@ -59,13 +71,14 @@ export const TeamLeaveRequestsScreen = ({ navigation }) => {
 
   const filteredLeaves = teamLeaves.filter((l) => l.status === selectedTab);
 
-  const handleApprove = (leave) => {
+  const handleApprove = async (leave) => {
     const comment = comments[leave.id] || '';
     if (!comment.trim()) {
       setAttemptedSubmitId(leave.id);
       return;
     }
-    dispatch(approveLeave({ leaveId: leave.id, comment: comment.trim() }));
+    const next = await approveLeave({ leaveId: leave.id, comment: comment.trim() });
+    setLeaves(next);
     setAttemptedSubmitId(null);
     Alert.alert(
       'Leave Approved',
@@ -73,16 +86,22 @@ export const TeamLeaveRequestsScreen = ({ navigation }) => {
     );
   };
 
-  const handleReject = (leave) => {
+  const handleReject = async (leave) => {
     const comment = comments[leave.id] || '';
     if (!comment.trim()) {
       setAttemptedSubmitId(leave.id);
       return;
     }
-    dispatch(rejectLeave({ leaveId: leave.id, comment: comment.trim() }));
+    const next = await rejectLeave({ leaveId: leave.id, comment: comment.trim() });
+    setLeaves(next);
     setAttemptedSubmitId(null);
     Alert.alert('Leave Rejected', `Leave request for ${leave.userName} rejected.`);
   };
+
+  // Wait for the first AsyncStorage read so the tab counts don't flash as 0.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>

@@ -13,7 +13,7 @@ export const SUPER_ADMIN_PASSWORD = 'SuperAdmin@123';
 
 // The Super Admin "user object" that gets stored in the session (AuthContext).
 // It follows the same shape as the other users in seedData.js so the rest of
-// the app (HeaderBar, ThemeContext, etc.) works with it without any changes.
+// the app (HeaderBar, the theme hook, etc.) works with it without any changes.
 export const SUPER_ADMIN_USER = {
   id: 'SUP-001',
   name: 'WMS Platform Owner',

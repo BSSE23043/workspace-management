@@ -6,10 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import { loadTasks } from '../../services/taskService';
+import { loadLeaves } from '../../services/leaveService';
+import { loadAttendance } from '../../services/attendanceService';
+import { loadSalaryConfig } from '../../services/salaryService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
@@ -20,16 +22,20 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  const { logs } = useSelector((state) => state.attendance);
-  const salaryConfig = useSelector((state) => state.salary);
-
-  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
-  // refresh on focus so the "today's task" card always shows the latest state.
+  // Tasks, leaves, punch logs & the salary policy are NOT in Redux anymore —
+  // read them from AsyncStorage on mount and refresh on focus so the cards
+  // always show the latest state.
   const [tasks, setTasks] = useState([]);
+  const [leaves, setLeaves] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [salaryConfig, setSalaryConfig] = useState({ companyWide: {}, overrides: {} });
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const load = async () => {
       setTasks(await loadTasks());
+      setLeaves(await loadLeaves());
+      setLogs(await loadAttendance());
+      setSalaryConfig(await loadSalaryConfig());
       setIsDataLoaded(true);
     };
     load();
@@ -51,7 +57,6 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
   ).length;
   // Own approved leave days this month (all leave is paid)
-  const { leaves } = useSelector((state) => state.leaves);
   const paidLeaveDays = leaves
     .filter(
       (l) =>

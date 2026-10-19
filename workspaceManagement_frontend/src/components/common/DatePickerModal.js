@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Pressable,
 } from 'react-native';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import Icon from './Icon';
 
 const MONTH_NAMES = [

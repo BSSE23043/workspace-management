@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import { IMAGES } from '../../assets/images';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';

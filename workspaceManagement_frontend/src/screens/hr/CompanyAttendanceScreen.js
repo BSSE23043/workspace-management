@@ -8,13 +8,14 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import DatePickerModal from '../../components/common/DatePickerModal';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { loadLeaves } from '../../services/leaveService';
+import { loadAttendance } from '../../services/attendanceService';
 import { PUNCH_DUTY_ROLES, isWeekday, attendanceTrackingStart, isOnApprovedLeave } from '../../utils/attendanceStats';
 
 export const CompanyAttendanceScreen = ({ navigation }) => {
@@ -22,13 +23,29 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
   const palette = getRolePalette('HR');
   const { currentUser } = useAuth();
 
-  const { logs } = useSelector((state) => state.attendance);
-  const { leaves } = useSelector((state) => state.leaves);
   const deviceToday = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(deviceToday);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [refreshing, setRefreshing] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
+
+  // Punch logs & leaves are NOT in Redux anymore — read them from AsyncStorage
+  // on mount and refresh on focus so approved leave (ON_LEAVE rows) and every
+  // real punch are always up to date. isDataLoaded waits for that first read
+  // so no row is wrongly shown as absent while the data is still loading.
+  const [leaves, setLeaves] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const loadData = async () => {
+      setLeaves(await loadLeaves());
+      setLogs(await loadAttendance());
+      setIsDataLoaded(true);
+    };
+    loadData();
+    const unsubscribe = navigation.addListener('focus', loadData);
+    return () => unsubscribe();
+  }, [navigation]);
 
   // User roster (for absence synthesis) — same AsyncStorage source as payroll
   const [users, setUsers] = useState([]);
@@ -245,6 +262,12 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
       )}
     </View>
   );
+
+  // Wait for the first AsyncStorage read so no row flashes as ABSENT before
+  // approved leave is known.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>

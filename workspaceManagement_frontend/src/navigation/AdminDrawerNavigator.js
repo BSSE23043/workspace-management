@@ -13,7 +13,7 @@ import {
 } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../hooks/useTheme';
 import { getAvatarSource, IMAGES } from '../assets/images';
 import Icon from '../components/common/Icon';
 

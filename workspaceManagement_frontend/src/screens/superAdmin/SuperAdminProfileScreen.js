@@ -3,13 +3,13 @@
 // ----------------------------------------------------------------------------
 // Read-only profile of the hardcoded Super Admin account. The Super Admin
 // details cannot be edited from the app (they live in superAdminConfig.js).
-// Includes a dark-mode switch (ThemeContext) and the logout button,
+// Includes a dark-mode switch (theme hook backed by Redux) and the logout button,
 // matching the style of the other role profile screens.
 // ============================================================================
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Image, Alert } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import { getAvatarSource } from '../../assets/images';
 import { ROLE_THEMES } from '../../utils/permissions';
 import HeaderBar from '../../components/common/HeaderBar';
@@ -105,7 +105,7 @@ export const SuperAdminProfileScreen = ({ navigation }) => {
 
           <View style={styles.switchRow}>
             <Text style={[styles.switchLabel, { color: palette.textPrimary }]}>
-              Dark Mode (ThemeContext)
+              Dark Mode
             </Text>
             <Switch
               value={isDark}

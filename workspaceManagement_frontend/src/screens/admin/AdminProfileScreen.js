@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
@@ -140,7 +140,7 @@ export const AdminProfileScreen = ({ navigation }) => {
 
           <View style={styles.prefRow}>
             <View>
-              <Text style={[styles.prefTitle, { color: palette.textPrimary }]}>Dark Mode (ThemeContext)</Text>
+              <Text style={[styles.prefTitle, { color: palette.textPrimary }]}>Dark Mode</Text>
               <Text style={[styles.prefSub, { color: palette.textSecondary }]}>
                 Toggle high-contrast dark theme
               </Text>

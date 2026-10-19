@@ -1,4 +1,4 @@
-import React, { useReducer } from 'react';
+import React, { useReducer, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,9 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { checkIn, checkOut } from '../../store/slices/attendanceSlice';
+import { checkIn, checkOut, loadAttendance } from '../../services/attendanceService';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { IMAGES } from '../../assets/images';
@@ -73,12 +72,21 @@ const initialGPSState = {
 };
 
 export const AttendanceActionScreen = ({ navigation }) => {
-  const reduxDispatch = useDispatch();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  const { logs } = useSelector((state) => state.attendance);
+  // Punch logs are NOT in Redux anymore — read them from AsyncStorage on mount
+  // and refresh on focus so today's record and the history stay accurate.
+  const [logs, setLogs] = useState([]);
+  useEffect(() => {
+    const load = async () => {
+      setLogs(await loadAttendance());
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
 
   // useReducer hook for GPS telemetry
   const [gpsState, dispatch] = useReducer(gpsReducer, initialGPSState);
@@ -89,10 +97,10 @@ export const AttendanceActionScreen = ({ navigation }) => {
   );
   const isCheckedIn = Boolean(todayRecord && todayRecord.status === 'PRESENT');
 
-  // This user's own punch history (newest first — slice unshifts new logs), max 5 shown
+  // This user's own punch history (newest first — new logs are unshifted), max 5 shown
   const myRecentLogs = logs.filter((l) => l.userId === currentUser?.id).slice(0, 5);
 
-  const handleToggleShiftPunch = () => {
+  const handleToggleShiftPunch = async () => {
     if (!gpsState.isInside) {
       Alert.alert(
         'Punch Blocked (Out of Bounds)',
@@ -102,20 +110,22 @@ export const AttendanceActionScreen = ({ navigation }) => {
       return;
     }
 
+    // Each punch saves to AsyncStorage and returns the updated list, which the
+    // recent-punches section below renders from.
     if (isCheckedIn) {
-      reduxDispatch(checkOut({ userId: currentUser?.id || '' }));
+      const next = await checkOut({ userId: currentUser?.id || '' });
+      setLogs(next);
       Alert.alert('Check-Out Confirmed', 'You have successfully punched out of your current shift.');
     } else {
-      reduxDispatch(
-        checkIn({
-          userId: currentUser?.id || '',
-          userName: currentUser?.name || '',
-          distanceMeters: gpsState.distance,
-          isGeofenceVerified: true,
-          terminal: gpsState.terminal,
-          bssid: gpsState.bssid,
-        })
-      );
+      const next = await checkIn({
+        userId: currentUser?.id || '',
+        userName: currentUser?.name || '',
+        distanceMeters: gpsState.distance,
+        isGeofenceVerified: true,
+        terminal: gpsState.terminal,
+        bssid: gpsState.bssid,
+      });
+      setLogs(next);
       Alert.alert('Check-In Confirmed', 'You have successfully punched in within the 200m geofence.');
     }
   };

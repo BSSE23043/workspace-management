@@ -7,9 +7,8 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { updateCompanySalaryConfig, updateEmployeeSalaryOverride } from '../../store/slices/salarySlice';
-import { useTheme } from '../../context/ThemeContext';
+import { loadSalaryConfig, updateCompanySalaryConfig, updateEmployeeSalaryOverride } from '../../services/salaryService';
+import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
@@ -49,11 +48,22 @@ const initialSalaryState = {
 };
 
 export const SalaryConfigScreen = ({ navigation }) => {
-  const reduxDispatch = useDispatch();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
 
-  const { companyWide, overrides } = useSelector((state) => state.salary);
+  // Salary policy is NOT in Redux anymore — read it from AsyncStorage on mount
+  // and refresh on focus so the saved company-wide policy / overrides are
+  // always the source for the form.
+  const [salaryConfig, setSalaryConfig] = useState({ companyWide: {}, overrides: {} });
+  useEffect(() => {
+    const load = async () => {
+      setSalaryConfig(await loadSalaryConfig());
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
+  const { companyWide, overrides } = salaryConfig;
 
   // Users are loaded from AsyncStorage (Redux no longer stores the user list)
   const [users, setUsers] = useState([]);
@@ -104,7 +114,7 @@ export const SalaryConfigScreen = ({ navigation }) => {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!isValid) {
       Alert.alert('Invalid Input', 'Please enter valid numbers for all salary parameters.');
       return;
@@ -116,11 +126,17 @@ export const SalaryConfigScreen = ({ navigation }) => {
       deductionPerAbsentDay: parseInt(state.deductionPerAbsentDay, 10),
     };
 
+    // Each save writes to AsyncStorage and returns the updated config, which
+    // the form then reads from on the next scope/employee switch.
     if (activeScope === 'COMPANY') {
-      reduxDispatch(updateCompanySalaryConfig(payload));
+      setSalaryConfig(await updateCompanySalaryConfig(payload));
       Alert.alert('Saved', 'Company-wide default salary policies updated.');
     } else if (selectedEmployee) {
-      reduxDispatch(updateEmployeeSalaryOverride({ userId: selectedEmployee.id, config: payload }));
+      const next = await updateEmployeeSalaryOverride({
+        userId: selectedEmployee.id,
+        config: payload,
+      });
+      setSalaryConfig(next);
       Alert.alert('Saved', `Employee custom salary override updated for ${selectedEmployee.name || 'employee'}.`);
     } else {
       Alert.alert('No Employee Selected', 'Select an employee before saving an override.');

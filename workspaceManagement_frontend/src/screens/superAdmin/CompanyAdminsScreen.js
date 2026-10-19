@@ -21,7 +21,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { isValidEmail, isValidPassword } from '../../utils/validation';
 import HeaderBar from '../../components/common/HeaderBar';

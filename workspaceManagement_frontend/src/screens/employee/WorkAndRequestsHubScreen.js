@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import MyLeaveRequestsScreen from './MyLeaveRequestsScreen';
 import MyHRTicketsScreen from './MyHRTicketsScreen';

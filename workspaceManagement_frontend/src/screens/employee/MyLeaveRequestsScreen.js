@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,9 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { applyLeave } from '../../store/slices/leavesSlice';
+import { loadLeaves, applyLeave } from '../../services/leaveService';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
@@ -24,12 +23,21 @@ const LEAVE_TYPES = [
 ];
 
 export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
-  const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  const { leaves } = useSelector((state) => state.leaves);
+  // Leaves are NOT in Redux anymore — read them from AsyncStorage on mount
+  // and refresh on focus so my history always matches the stored state.
+  const [leaves, setLeaves] = useState([]);
+  useEffect(() => {
+    const load = async () => {
+      setLeaves(await loadLeaves());
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
   const myLeaves = leaves.filter((l) => l.userId === currentUser?.id);
 
   const [selectedType, setSelectedType] = useState('Annual Leave');
@@ -42,7 +50,7 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
   // Validate dates with pure validation function checking overlaps
   const dateValidation = validateLeaveDates(startDate, endDate, myLeaves);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setSubmitted(true);
     if (!dateValidation.valid) {
       return;
@@ -56,17 +64,18 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
     const end = new Date(endDate);
     const daysCount = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
 
-    dispatch(
-      applyLeave({
-        userId: currentUser?.id || '',
-        userName: currentUser?.name || '',
-        type: selectedType,
-        startDate,
-        endDate,
-        daysCount,
-        reason: reason.trim(),
-      })
-    );
+    // Saves the new PENDING request straight to AsyncStorage and returns the
+    // updated list — the "My Submitted Requests" section refreshes from it.
+    const next = await applyLeave({
+      userId: currentUser?.id || '',
+      userName: currentUser?.name || '',
+      type: selectedType,
+      startDate,
+      endDate,
+      daysCount,
+      reason: reason.trim(),
+    });
+    setLeaves(next);
 
     Alert.alert(
       'Leave Request Submitted',

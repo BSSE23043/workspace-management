@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+import { loadLeaves } from '../../services/leaveService';
+import { loadAttendance } from '../../services/attendanceService';
+import { loadSalaryConfig } from '../../services/salaryService';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
 import { elapsedWorkdaysInMonth, getUnexcusedAbsentDays, attendanceTrackingStart } from '../../utils/attendanceStats';
 
@@ -20,10 +22,25 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  // Real data from Redux: attendance logs, approved leaves, salary policy
-  const { logs } = useSelector((state) => state.attendance);
-  const { leaves } = useSelector((state) => state.leaves);
-  const salaryConfig = useSelector((state) => state.salary);
+  // Nothing salary-related stays in Redux anymore — the salary policy, leaves
+  // and punch logs all come from AsyncStorage, loaded on mount and refreshed
+  // on focus so paid-leave days and present days below always match the stored
+  // state. isDataLoaded waits for that first read so no deduction flashes.
+  const [leaves, setLeaves] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [salaryConfig, setSalaryConfig] = useState({ companyWide: {}, overrides: {} });
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setLeaves(await loadLeaves());
+      setLogs(await loadAttendance());
+      setSalaryConfig(await loadSalaryConfig());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
 
   // Current month window (same approach as the dashboard / HR salary screen)
   const monthPrefix = new Date().toISOString().slice(0, 7);
@@ -79,6 +96,11 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
       [{ text: 'OK' }]
     );
   };
+
+  // Wait for the first AsyncStorage read before showing the payslip numbers.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>

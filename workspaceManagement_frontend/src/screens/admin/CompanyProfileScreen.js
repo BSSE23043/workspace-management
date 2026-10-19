@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,8 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { updateCompanyProfile } from '../../store/slices/companySlice';
-import { useTheme } from '../../context/ThemeContext';
-import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { useTheme } from '../../hooks/useTheme';
+import { loadCompanyProfile, saveCompanyProfile } from '../../services/companyService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
@@ -37,25 +35,34 @@ const ALL_DAYS = [
 ];
 
 export const CompanyProfileScreen = ({ navigation }) => {
-  const dispatch = useDispatch();
-  const company = useSelector((state) => state.company);
   const { getRolePalette, isDark } = useTheme();
   const palette = getRolePalette('ADMIN');
 
   const [mapModalVisible, setMapModalVisible] = useState(false);
-  const [name, setName] = useState(company.name);
-  const [timezone, setTimezone] = useState(company.timezone);
+  const [name, setName] = useState('');
+  const [timezone, setTimezone] = useState('');
   const [workingDays, setWorkingDays] = useState(['M', 'T1', 'W', 'T2', 'F']);
-  const [latitude, setLatitude] = useState(String(company.latitude));
-  const [longitude, setLongitude] = useState(String(company.longitude));
-  const [radius, setRadius] = useState(String(company.geofenceRadiusMeters));
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [radius, setRadius] = useState('');
 
-  const [workingDaysPerMonth, setWorkingDaysPerMonth] = useState(
-    String(company.standardWorkingDaysPerMonth || 22)
-  );
-  const [absenceDeduction, setAbsenceDeduction] = useState(
-    String(company.defaultAbsenceDeduction || 5000)
-  );
+  const [workingDaysPerMonth, setWorkingDaysPerMonth] = useState('22');
+  const [absenceDeduction, setAbsenceDeduction] = useState('5000');
+
+  // The company profile now lives in AsyncStorage (it was removed from Redux) —
+  // load the saved values once on mount and seed the form fields from them.
+  useEffect(() => {
+    (async () => {
+      const company = await loadCompanyProfile();
+      setName(company.name);
+      setTimezone(company.timezone);
+      setLatitude(String(company.latitude));
+      setLongitude(String(company.longitude));
+      setRadius(String(company.geofenceRadiusMeters));
+      setWorkingDaysPerMonth(String(company.standardWorkingDaysPerMonth || 22));
+      setAbsenceDeduction(String(company.defaultAbsenceDeduction || 5000));
+    })();
+  }, []);
 
   const toggleDay = (dayKey) => {
     if (workingDays.includes(dayKey)) {
@@ -65,7 +72,7 @@ export const CompanyProfileScreen = ({ navigation }) => {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const payload = {
       name,
       timezone,
@@ -75,10 +82,9 @@ export const CompanyProfileScreen = ({ navigation }) => {
       standardWorkingDaysPerMonth: parseInt(workingDaysPerMonth, 10) || 22,
       defaultAbsenceDeduction: parseInt(absenceDeduction, 10) || 5000,
     };
-    // Update Redux (in-memory) and persist to AsyncStorage so the company
-    // profile survives an app reload (same pattern as the user list).
-    dispatch(updateCompanyProfile(payload));
-    storageService.setItem(STORAGE_KEYS.COMPANY, { ...company, ...payload });
+    // Persist to AsyncStorage — the company profile's single source of truth
+    // (same read → merge → write pattern as the other *Service.js files).
+    await saveCompanyProfile(payload);
     Alert.alert('Configuration Saved', 'Company profile and geofence policies updated.');
   };
 

@@ -1,19 +1,15 @@
 import { configureStore } from '@reduxjs/toolkit';
-import companyReducer from './slices/companySlice';
-import attendanceReducer from './slices/attendanceSlice';
-import salaryReducer from './slices/salarySlice';
-import leavesReducer from './slices/leavesSlice';
-// NOTE: tasks, requirements & tickets were removed from Redux on purpose —
-// they are loaded from AsyncStorage on demand by services/taskService.js,
-// services/requirementService.js and services/ticketService.js instead
-// (see those files for the details).
+import themeReducer from './slices/themeSlice';
+// NOTE: every domain dataset was removed from Redux on purpose — tasks,
+// requirements, tickets, leaves, attendance, salary AND the company profile are
+// loaded from AsyncStorage on demand through the matching
+// services/*Service.js file (see those files for the details). The only things
+// left in Redux are the dark/light theme flag (slices/themeSlice.js) and no
+// other slices.
 
 export const store = configureStore({
   reducer: {
-    company: companyReducer,
-    attendance: attendanceReducer,
-    salary: salaryReducer,
-    leaves: leavesReducer,
+    theme: themeReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
