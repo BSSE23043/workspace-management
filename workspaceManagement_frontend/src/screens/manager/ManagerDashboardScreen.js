@@ -20,7 +20,6 @@ export const ManagerDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
-  const { leaves } = useSelector((state) => state.leaves);
   const { logs } = useSelector((state) => state.attendance);
 
   // Tasks & requirements are NOT in Redux anymore — they are read from
@@ -73,10 +72,6 @@ export const ManagerDashboardScreen = ({ navigation }) => {
   const conflictingTasks = useMemo(() => {
     return teamTasks.filter((t) => t.hasConflict || t.bufferDays < 0);
   }, [teamTasks]);
-
-  const pendingLeaves = useMemo(() => {
-    return leaves.filter((l) => teamIds.includes(l.userId) && l.status === 'PENDING').length;
-  }, [leaves, teamIds]);
 
   // Team presence for today comes from real check-in logs (no demo numbers).
   const todayStr = new Date().toISOString().split('T')[0];
@@ -136,7 +131,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
 
         {/* 2x2 KPI Grid */}
         <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
-          Engineering Operational KPI Pulse
+          Team Report
         </Text>
         <View style={styles.kpiGrid}>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
@@ -144,11 +139,6 @@ export const ManagerDashboardScreen = ({ navigation }) => {
               {presentCount}/{myTeam.length}
             </Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Team Present</Text>
-          </View>
-
-          <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiValue, { color: '#D97706' }]}>{pendingLeaves}</Text>
-            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Pending Leave</Text>
           </View>
 
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>

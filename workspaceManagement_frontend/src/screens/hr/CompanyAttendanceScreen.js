@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,21 +9,35 @@ import {
   Alert,
 } from 'react-native';
 import { useSelector } from 'react-redux';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import DatePickerModal from '../../components/common/DatePickerModal';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { PUNCH_DUTY_ROLES, isWeekday, attendanceTrackingStart } from '../../utils/attendanceStats';
 
 export const CompanyAttendanceScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
+  const { currentUser } = useAuth();
 
   const { logs } = useSelector((state) => state.attendance);
+  const { leaves } = useSelector((state) => state.leaves);
   const deviceToday = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(deviceToday);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [refreshing, setRefreshing] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
+
+  // User roster (for absence synthesis) — same AsyncStorage source as payroll
+  const [users, setUsers] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+      setUsers(storedUsers);
+    })();
+  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -38,10 +52,47 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
     return dt.toISOString().split('T')[0];
   };
 
-  const dateLogs = useMemo(
-    () => logs.filter((l) => l.date === selectedDate),
-    [logs, selectedDate]
-  );
+  // Real punches for the date + synthesized rows for punch-duty users with no
+  // log that day (working days only, and only for dates up to today).
+  // The logged-in HR never sees their own row — staff only.
+  const dateLogs = useMemo(() => {
+    const real = logs.filter((l) => l.date === selectedDate && l.userId !== currentUser?.id);
+    const realUserIds = new Set(real.map((l) => l.userId));
+    const synth = [];
+    // Absences only count from the day tracking began (first-ever log; today
+    // if none) — earlier dates were not tracked and are never marked absent.
+    const trackingStart = attendanceTrackingStart(logs, deviceToday);
+    if (selectedDate >= trackingStart && selectedDate <= deviceToday && isWeekday(selectedDate)) {
+      users
+        .filter(
+          (u) =>
+            u.isActive !== false &&
+            PUNCH_DUTY_ROLES.includes(u.role) &&
+            u.id !== currentUser?.id
+        )
+        .filter((u) => !realUserIds.has(u.id))
+        .forEach((u) => {
+          const onLeave = leaves.some(
+            (l) =>
+              l.userId === u.id &&
+              l.status === 'APPROVED' &&
+              l.startDate <= selectedDate &&
+              l.endDate >= selectedDate
+          );
+          synth.push({
+            id: `SYNTH-${u.id}-${selectedDate}`,
+            userId: u.id,
+            userName: u.name,
+            department: u.title || '',
+            date: selectedDate,
+            status: onLeave ? 'ON_LEAVE' : 'ABSENT',
+            statusCategory: onLeave ? 'APPROVED LEAVE' : 'UNEXCUSED ABSENT',
+            synthesized: true,
+          });
+        });
+    }
+    return [...real, ...synth];
+  }, [logs, users, leaves, selectedDate, deviceToday, currentUser]);
 
   const presentList = useMemo(
     () => dateLogs.filter((l) => l.status === 'PRESENT' || l.statusCategory === 'PRESENT & VERIFIED'),
@@ -131,7 +182,7 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
             styles.statusTag,
             item.status === 'PRESENT'
               ? styles.tagGreen
-              : item.status === 'CORRECTED_PRESENT'
+              : item.status === 'CORRECTED_PRESENT' || item.status === 'ON_LEAVE'
               ? styles.tagAmber
               : styles.tagRed,
           ]}
@@ -141,7 +192,7 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
               styles.statusTagText,
               item.status === 'PRESENT'
                 ? styles.textGreen
-                : item.status === 'CORRECTED_PRESENT'
+                : item.status === 'CORRECTED_PRESENT' || item.status === 'ON_LEAVE'
                 ? styles.textAmber
                 : styles.textRed,
             ]}
@@ -155,13 +206,21 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
         <View style={styles.detailItem}>
           <Icon name="time" size={13} color="#64748B" />
           <Text style={[styles.detailText, { color: palette.textPrimary }]}>
-            {item.checkInTime || 'No Punch'} {item.checkOutTime ? `→ ${item.checkOutTime}` : '• Open'}
+            {item.synthesized
+              ? item.status === 'ON_LEAVE'
+                ? 'Approved Leave — No Punch Required'
+                : 'No Punch Recorded'
+              : `${item.checkInTime || 'No Punch'} ${item.checkOutTime ? `→ ${item.checkOutTime}` : '• Open'}`}
           </Text>
         </View>
         <View style={styles.detailItem}>
           <Icon name="location" size={13} color="#64748B" />
           <Text style={[styles.detailText, { color: palette.textPrimary }]}>
-            {item.distanceMeters !== undefined ? `${item.distanceMeters}m radius` : 'Manual Log'}
+            {item.synthesized
+              ? '—'
+              : item.distanceMeters !== undefined
+              ? `${item.distanceMeters}m radius`
+              : 'Manual Log'}
           </Text>
         </View>
       </View>

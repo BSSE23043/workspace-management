@@ -21,7 +21,7 @@ import storageService, { STORAGE_KEYS } from '../../services/storageService';
 
 const SYSTEM_ROLES = [
   { id: 'EMPLOYEE', label: 'Employee', desc: 'Can submit leave, punch attendance, view salary & work tasks' },
-  { id: 'MANAGER', label: 'Manager', desc: 'Approves team leave, manages dual-deadline tasks & client reqs' },
+  { id: 'MANAGER', label: 'Manager', desc: 'Handles client requirements and task management' },
   { id: 'HR', label: 'HR Specialist', desc: 'Configures deduction rates, handles tickets & attendance overrides' },
   { id: 'ADMIN', label: 'Company Administrator', desc: 'Full account provisioning, policy setup & system drawer' },
   { id: 'CLIENT', label: 'Client Representative', desc: 'Tracks requirement milestones & sends broadcast clarifications' },
@@ -83,7 +83,13 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
         setEmail(existing.email || '');
         setPassword(existing.password || 'password123');
         setRole(existing.role || 'EMPLOYEE');
-        setSelectedManagerId(existing.managerId || '');
+        // Only keep a stored reporting manager if it actually points at a
+        // MANAGER; an old wrong assignment (e.g. an admin) is treated as
+        // unassigned so the "assign a manager" warning shows again.
+        const storedManager = scoped.find((u) => u.id === existing.managerId);
+        setSelectedManagerId(
+          storedManager && storedManager.role === 'MANAGER' ? existing.managerId : ''
+        );
         setAvatarKey(existing.avatarKey || 'dpEmpAli');
         setIsActive(existing.isActive !== false);
       } else {
@@ -94,9 +100,10 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
     })();
   }, []);
 
-  // Available managers list (from the loaded, company-scoped users)
+  // Available managers list (from the loaded, company-scoped users).
+  // Employees may only be assigned to a MANAGER — never to an admin.
   const managerOptions = scopedUsers.filter(
-    (u) => u.role === 'MANAGER' || u.role === 'ADMIN'
+    (u) => u.role === 'MANAGER'
   );
 
   const handleSave = async () => {
@@ -131,7 +138,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
       return;
     }
 
-    const mgrObj = scopedUsers.find((u) => u.id === selectedManagerId);
+    const mgrObj = scopedUsers.find((u) => u.id === selectedManagerId && u.role === 'MANAGER');
 
     // Users are typed by ROLE only (no departments in the system).
     const userPayload = {
@@ -323,7 +330,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
               {/* Syllabus Requirement: Inline warning banner */}
               {hasMissingManager && (
                 <Text style={styles.hierarchyWarning}>
-                  ! Employees must have an assigned Manager for leave approval
+                  ! Employee must be assigned to a manager.
                 </Text>
               )}
             </View>

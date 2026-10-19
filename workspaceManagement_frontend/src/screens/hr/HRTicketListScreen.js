@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
 } from 'react-native';
-import { useSelector } from 'react-redux';
+import { loadTickets } from '../../services/ticketService';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
@@ -15,7 +15,20 @@ export const HRTicketListScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
 
-  const { tickets } = useSelector((state) => state.tickets);
+  // Tickets are stored in AsyncStorage — load on demand (mount + every focus)
+  // so the queue always reflects the latest stored state.
+  const [tickets, setTickets] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setTickets(await loadTickets());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
+
   const [selectedStatus, setSelectedStatus] = useState('ALL');
 
   const countByStatus = (status) => tickets.filter((t) => t.status === status).length;
@@ -31,7 +44,6 @@ export const HRTicketListScreen = ({ navigation }) => {
   );
 
   const renderItem = ({ item }) => {
-    const isOverride = item.category === 'Attendance Correction';
     return (
       <TouchableOpacity
         style={[styles.ticketCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
@@ -78,16 +90,14 @@ export const HRTicketListScreen = ({ navigation }) => {
             <Icon name="person" size={13} color="#64748B" />
             <Text style={[styles.userName, { color: palette.textPrimary }]}>{item.userName}</Text>
           </View>
-          {isOverride && (
-            <View style={styles.overrideBadge}>
-              <Icon name="time" size={12} color="#D97706" />
-              <Text style={styles.overrideText}>Attendance Override Attached</Text>
-            </View>
-          )}
         </View>
       </TouchableOpacity>
     );
   };
+
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
@@ -133,7 +143,7 @@ export const HRTicketListScreen = ({ navigation }) => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
-              No tickets found in this filter category.
+              No tickets found for this filter.
             </Text>
           </View>
         }
@@ -232,20 +242,6 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 11,
     fontWeight: '600',
-  },
-  overrideBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  overrideText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#B45309',
   },
   emptyContainer: {
     alignItems: 'center',

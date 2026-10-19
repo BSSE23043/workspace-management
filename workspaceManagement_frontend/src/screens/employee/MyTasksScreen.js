@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { loadTasks, updateTaskStatus } from '../../services/taskService';
+import { loadTasks, updateTaskStatus, addTaskLog } from '../../services/taskService';
+import { timeAgo } from '../../utils/timeAgo';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
@@ -62,6 +63,9 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
   const [taskState, setTaskState] = useState(activeTask?.status || 'IN_PROGRESS');
   const [progressNote, setProgressNote] = useState('');
   const [progressPercent, setProgressPercent] = useState(String(activeTask?.progressPercent || 65));
+  // Broadcast-style message box (same idea as the requirement broadcasts):
+  // the employee types here and the manager reads it on his task timeline.
+  const [messageText, setMessageText] = useState('');
 
   // Sync state when activeTask changes
   useEffect(() => {
@@ -103,6 +107,7 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
       status: taskState,
       progressPercent: validPct,
       note: progressNote.trim() || `Progress recorded at ${validPct}%`,
+      author: currentUser?.name,
     });
     setTasks(nextTasks);
 
@@ -110,6 +115,19 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
       'Progress Saved',
       `Task ${task.code} updated to ${taskState.replace('_', ' ')} (${validPct}%). Manager notified.`
     );
+  };
+
+  // Sends the employee's message onto the shared task timeline, so the
+  // manager sees it on his "Chronological Progress Log" screen.
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !activeTask) return;
+    const nextTasks = await addTaskLog({
+      taskId: activeTask.id,
+      note: messageText.trim(),
+      author: currentUser?.name,
+    });
+    setTasks(nextTasks);
+    setMessageText('');
   };
 
   // Wait for the first AsyncStorage read so the list doesn't flash its empty
@@ -164,13 +182,6 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
         {/* Active Task Workspace Card */}
         {activeTask && (
           <View style={[styles.featuredCard, { backgroundColor: palette.card, borderColor: palette.primary, borderWidth: 1.5 }]}>
-            <View style={[styles.activeEditingPill, { backgroundColor: palette.badge }]}>
-              <Icon name="flash" size={13} color={palette.primary} />
-              <Text style={[styles.activeEditingPillText, { color: palette.primary }]}>
-                ACTIVE TASK WORKSPACE • {activeTask.code}
-              </Text>
-            </View>
-
             <View style={styles.featuredHeader}>
               <View style={styles.codeRow}>
                 <Text style={[styles.codeText, { color: palette.primary }]}>{activeTask.code}</Text>
@@ -187,11 +198,11 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
             <Text style={[styles.taskTitle, { color: palette.textPrimary }]}>{activeTask.title}</Text>
             <Text style={[styles.taskDesc, { color: palette.textSecondary }]}>{activeTask.description}</Text>
 
-            {/* Note: ONLY Internal Employee Deadline is displayed! External client deadline is strictly hidden */}
+            {/* Note: ONLY the employee's own deadline is displayed! External client deadline is strictly hidden */}
             <View style={styles.deadlineBadge}>
               <Icon name="calendar" size={14} color="#4338CA" />
               <Text style={styles.deadlineBadgeText}>
-                Internal Employee Deadline: {activeTask.internalDeadline}
+                Deadline: {activeTask.internalDeadline}
               </Text>
             </View>
 
@@ -304,9 +315,56 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
                 onPress={() => handleSaveProgress(activeTask)}
                 activeOpacity={0.85}
               >
-                <Icon name="checkmark" size={15} color="#FFFFFF" />
-                <Text style={styles.saveBtnText}>✓ Save Progress Update</Text>
+                <Text style={styles.saveBtnText}>Save Progress Update</Text>
               </TouchableOpacity>
+            </View>
+
+            {/* Progress Messages — the shared manager/employee thread for this
+                task, built exactly like the requirement broadcasts (author +
+                "time ago" + content, newest first). */}
+            <View style={[styles.threadBox, { backgroundColor: palette.inputBackground, borderColor: palette.cardBorder }]}>
+              <Text style={[styles.threadHeading, { color: palette.textPrimary }]}>
+                Progress Messages
+              </Text>
+
+              {(activeTask.logs || []).length === 0 ? (
+                <Text style={[styles.threadEmpty, { color: palette.textSecondary }]}>
+                  No messages yet. Progress updates exchanged with your manager on this
+                  task will appear here.
+                </Text>
+              ) : (
+                activeTask.logs.map((log, idx) => (
+                  <View key={idx} style={[styles.threadItem, { backgroundColor: palette.surface }]}>
+                    <View style={styles.threadHeader}>
+                      <Text style={[styles.threadAuthor, { color: palette.primary }]}>
+                        {log.author ||
+                          (String(log.note).indexOf('Manager Note:') === 0 ? 'Manager' : 'System')}
+                      </Text>
+                      <Text style={styles.threadTime}>{timeAgo(log.createdAt) || log.time}</Text>
+                    </View>
+                    <Text style={[styles.threadContent, { color: palette.textPrimary }]}>
+                      {log.note}
+                    </Text>
+                  </View>
+                ))
+              )}
+
+              <View style={styles.threadInputRow}>
+                <TextInput
+                  value={messageText}
+                  onChangeText={setMessageText}
+                  placeholder="Message your manager about this task..."
+                  placeholderTextColor="#94A3B8"
+                  style={[styles.threadInput, { backgroundColor: palette.surface, borderColor: palette.inputBorder, color: palette.textPrimary }]}
+                />
+                <TouchableOpacity
+                  style={[styles.threadSendBtn, { backgroundColor: palette.primary }]}
+                  onPress={handleSendMessage}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.threadSendText}>Send</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         )}
@@ -526,6 +584,69 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  threadBox: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
+    marginTop: 12,
+  },
+  threadHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  threadEmpty: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  threadItem: {
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 8,
+  },
+  threadHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  threadAuthor: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  threadTime: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  threadContent: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  threadInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  threadInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    fontSize: 12,
+  },
+  threadSendBtn: {
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  threadSendText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   sectionHeading: {
     fontSize: 13,
     fontWeight: '800',
@@ -557,21 +678,6 @@ const styles = StyleSheet.create({
   itemDeadline: {
     fontSize: 11,
     marginTop: 2,
-  },
-  activeEditingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginBottom: 10,
-  },
-  activeEditingPillText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
   },
   progressLabelRow: {
     flexDirection: 'row',

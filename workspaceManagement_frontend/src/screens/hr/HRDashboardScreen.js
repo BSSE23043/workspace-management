@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,40 +7,84 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useSelector } from 'react-redux';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { loadTickets } from '../../services/ticketService';
+import { PUNCH_DUTY_ROLES, isWeekday } from '../../utils/attendanceStats';
 
 export const HRDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
+  const { currentUser } = useAuth();
 
-  const { tickets } = useSelector((state) => state.tickets);
   const { logs } = useSelector((state) => state.attendance);
   const { leaves } = useSelector((state) => state.leaves);
   const salaryConfig = useSelector((state) => state.salary.companyWide);
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const monthLabel = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  // Tickets live in AsyncStorage — load on demand (mount + focus) so the
+  // ticket KPIs and recent activity always match the stored state.
+  const [tickets, setTickets] = useState([]);
+  useEffect(() => {
+    const load = async () => {
+      setTickets(await loadTickets());
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
 
-  const todaysLogs = logs.filter((l) => l.date === todayStr);
-  const checkedInCount = todaysLogs.filter(
-    (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
-  ).length;
-  const unexcusedCount = todaysLogs.filter((l) => l.status === 'ABSENT').length;
+  // User roster for today's expected headcount (absence derivation)
+  const [users, setUsers] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+      setUsers(storedUsers);
+    })();
+  }, []);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Staff-only KPIs — the logged-in HR's own punches/leaves are never counted
+  const todaysLogs = logs.filter((l) => l.date === todayStr && l.userId !== currentUser?.id);
+  const presentUserIds = new Set(
+    todaysLogs
+      .filter((l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT')
+      .map((l) => l.userId)
+  );
+  const checkedInCount = presentUserIds.size;
   const approvedLeaveCount = leaves.filter(
     (l) =>
+      l.userId !== currentUser?.id &&
       l.status === 'APPROVED' &&
       l.startDate &&
       l.endDate &&
       l.startDate <= todayStr &&
       l.endDate >= todayStr
   ).length;
+  // Unexcused = on punch duty today, no check-in, not on approved leave
+  const unexcusedCount = isWeekday(todayStr)
+    ? users.filter(
+        (u) =>
+          u.isActive !== false &&
+          PUNCH_DUTY_ROLES.includes(u.role) &&
+          u.id !== currentUser?.id &&
+          !presentUserIds.has(u.id) &&
+          !leaves.some(
+            (l) =>
+              l.userId === u.id &&
+              l.status === 'APPROVED' &&
+              l.startDate <= todayStr &&
+              l.endDate >= todayStr
+          )
+      ).length
+    : 0;
   const openTickets = tickets.filter((t) => t.status === 'OPEN').length;
-  const pendingOverrides = tickets.filter(
-    (t) =>
-      t.category === 'Attendance Correction' &&
-      (t.status === 'OPEN' || t.status === 'IN_PROGRESS')
+  // Attendance corrections actually applied today (HR-corrected punch records)
+  const correctionsToday = todaysLogs.filter(
+    (l) => l.status === 'CORRECTED_PRESENT' || l.statusCategory === 'HR CORRECTED RECORDS'
   ).length;
   const recentTickets = tickets.slice(0, 4);
 
@@ -49,25 +93,13 @@ export const HRDashboardScreen = ({ navigation }) => {
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
       <HeaderBar
-        title="HR Operations & Payroll Dashboard"
+        title="HR Dashboard"
         subtitle="Human Resources"
         navigation={navigation}
-        statusText="CYCLE ACTIVE"
-        statusColor="#0F766E"
+        showStatus={false}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Banner */}
-        <View style={[styles.cycleBanner, { backgroundColor: palette.primary }]}>
-          <View style={styles.bannerRow}>
-            <Icon name="calendar" size={16} color="#FFFFFF" />
-            <Text style={styles.bannerTitle}>PAYROLL OPS CYCLE: {monthLabel} • Live Synced</Text>
-          </View>
-          <Text style={styles.bannerSub}>
-            Standard {salaryConfig.workingDaysPerPeriod} billable days • Deduction rate enforced
-          </Text>
-        </View>
-
         {/* Today's Attendance 2x2 KPI Grid */}
         <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>
           Today&apos;s Attendance Overview
@@ -79,14 +111,14 @@ export const HRDashboardScreen = ({ navigation }) => {
           </View>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
             <Text style={[styles.kpiValue, { color: '#DC2626' }]}>{pad(unexcusedCount)}</Text>
-            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Unexcused</Text>
+            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Absents</Text>
           </View>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
             <Text style={[styles.kpiValue, { color: '#2563EB' }]}>{pad(approvedLeaveCount)}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Approved Leave</Text>
           </View>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiValue, { color: '#D97706' }]}>{pad(pendingOverrides)}</Text>
+            <Text style={[styles.kpiValue, { color: '#D97706' }]}>{pad(correctionsToday)}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Corrections</Text>
           </View>
         </View>
@@ -104,7 +136,7 @@ export const HRDashboardScreen = ({ navigation }) => {
           </View>
 
           <Text style={[styles.cardBodyText, { color: palette.textSecondary }]}>
-            {openTickets} Active Inquiries • {pendingOverrides} Attendance Overrides Pending
+            {openTickets} Active Inquiries • {correctionsToday} Attendance Corrections Today
           </Text>
 
           <TouchableOpacity
@@ -139,12 +171,6 @@ export const HRDashboardScreen = ({ navigation }) => {
             <Text style={[styles.policyLabel, { color: palette.textSecondary }]}>Absent Deduction:</Text>
             <Text style={[styles.policyVal, { color: palette.textPrimary }]}>
               {Number(salaryConfig.deductionPerAbsentDay).toLocaleString()} PKR / d
-            </Text>
-          </View>
-          <View style={styles.policyRow}>
-            <Text style={[styles.policyLabel, { color: palette.textSecondary }]}>Unpaid Leave Rate:</Text>
-            <Text style={[styles.policyVal, { color: palette.textPrimary }]}>
-              {Number(salaryConfig.deductionPerUnpaidLeaveDay).toLocaleString()} PKR / d
             </Text>
           </View>
 
@@ -208,28 +234,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 36,
-  },
-  cycleBanner: {
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 18,
-  },
-  bannerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  bannerTitle: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  bannerSub: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 11,
-    marginLeft: 24,
   },
   sectionTitle: {
     fontSize: 14,

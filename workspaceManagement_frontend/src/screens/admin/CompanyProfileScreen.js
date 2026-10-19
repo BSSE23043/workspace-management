@@ -56,9 +56,6 @@ export const CompanyProfileScreen = ({ navigation }) => {
   const [absenceDeduction, setAbsenceDeduction] = useState(
     String(company.defaultAbsenceDeduction || 5000)
   );
-  const [unpaidLeaveDeduction, setUnpaidLeaveDeduction] = useState(
-    String(company.defaultUnpaidLeaveDeduction || 3500)
-  );
 
   const toggleDay = (dayKey) => {
     if (workingDays.includes(dayKey)) {
@@ -77,7 +74,6 @@ export const CompanyProfileScreen = ({ navigation }) => {
       geofenceRadiusMeters: parseInt(radius, 10) || 200,
       standardWorkingDaysPerMonth: parseInt(workingDaysPerMonth, 10) || 22,
       defaultAbsenceDeduction: parseInt(absenceDeduction, 10) || 5000,
-      defaultUnpaidLeaveDeduction: parseInt(unpaidLeaveDeduction, 10) || 3500,
     };
     // Update Redux (in-memory) and persist to AsyncStorage so the company
     // profile survives an app reload (same pattern as the user list).
@@ -393,14 +389,6 @@ export const CompanyProfileScreen = ({ navigation }) => {
             onChangeText={setAbsenceDeduction}
             keyboardType="numeric"
             placeholder="5000"
-          />
-
-          <AppInput
-            label="Default Unpaid Leave Deduction (PKR / Day)"
-            value={unpaidLeaveDeduction}
-            onChangeText={setUnpaidLeaveDeduction}
-            keyboardType="numeric"
-            placeholder="3500"
           />
         </View>
 

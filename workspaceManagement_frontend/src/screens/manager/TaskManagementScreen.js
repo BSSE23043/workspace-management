@@ -125,6 +125,9 @@ export const TaskManagementScreen = ({ navigation }) => {
       assignedToNames: assignedNames,
       assignedToId: assignedToIds[0],
       assignedToName: assignedNames.join(', '),
+      // The manager who creates the task, so the employee's task card can show
+      // the real name instead of a generic role label.
+      createdByName: currentUser?.name,
       priority,
       internalDeadline,
       clientDeadline,

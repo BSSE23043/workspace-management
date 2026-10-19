@@ -13,6 +13,7 @@ import { loadTasks } from '../../services/taskService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
+import { elapsedWorkdaysInMonth, getUnexcusedAbsentDays, attendanceTrackingStart } from '../../utils/attendanceStats';
 
 export const EmployeeDashboardScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
@@ -49,16 +50,36 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const presentDays = myMonthLogs.filter(
     (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
   ).length;
+  // Own approved leave days this month (all leave is paid)
+  const { leaves } = useSelector((state) => state.leaves);
+  const paidLeaveDays = leaves
+    .filter(
+      (l) =>
+        l.userId === currentUser?.id &&
+        l.status === 'APPROVED' &&
+        (l.startDate || '').startsWith(monthPrefix)
+    )
+    .reduce((acc, l) => acc + (l.daysCount || 1), 0);
+  // No punch on a tracked working day = absence (counting starts at the first
+  // ever attendance log — days before tracking began are not absences)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const absentDays = getUnexcusedAbsentDays({
+    workdaysElapsed: elapsedWorkdaysInMonth(
+      monthPrefix,
+      todayStr,
+      attendanceTrackingStart(logs, todayStr)
+    ),
+    presentDays,
+    paidLeaveDays,
+  });
   const cfg = salaryConfig.overrides[currentUser?.id] || salaryConfig.companyWide;
   const myEstimate = calculateSalaryEstimate({
     baseSalary: currentUser?.baseSalary || cfg.baseSalary || cfg.baseSalaryDefault || 0,
     workingDaysPerPeriod: cfg.workingDaysPerPeriod,
     presentDays,
-    paidLeaveDays: 0,
-    unpaidLeaveDays: 0,
-    absentDays: 0,
+    paidLeaveDays,
+    absentDays,
     deductionPerAbsentDay: cfg.deductionPerAbsentDay,
-    deductionPerUnpaidLeaveDay: cfg.deductionPerUnpaidLeaveDay,
   });
 
   // Wait for the first AsyncStorage read so the task card doesn't flash while
@@ -83,25 +104,10 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
           <Text style={[styles.welcomeGreeting, { color: palette.textPrimary }]}>
             Welcome back, {currentUser?.name || 'Team Member'} 👋
           </Text>
-          <Text style={[styles.welcomeSub, { color: palette.textSecondary }]}>
-            Software Engineer II
-          </Text>
         </View>
 
-        {/* ON-PREMISE ACTIVE Attendance Card */}
+        {/* Attendance Shortcut Card */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <View style={styles.presenceHeader}>
-            <View style={styles.activePill}>
-              <View style={styles.greenDot} />
-              <Text style={styles.activePillText}>ON-PREMISE ACTIVE • 09:02 AM</Text>
-            </View>
-            <Text style={[styles.terminalText, { color: palette.textSecondary }]}>Terminal 04-A</Text>
-          </View>
-
-          <Text style={[styles.presenceDesc, { color: palette.textPrimary }]}>
-            Validated within Lahore Campus 200m perimeter (14.2m radius)
-          </Text>
-
           <TouchableOpacity
             style={[styles.checkoutBtn, { backgroundColor: palette.primary }]}
             onPress={() => navigation.navigate('Attendance')}
@@ -173,7 +179,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
         <View style={styles.actionTilesRow}>
           <TouchableOpacity
             style={[styles.actionTile, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
-            onPress={() => navigation.navigate('Work & Requests')}
+            onPress={() => navigation.navigate('Work & Requests', { initialTab: 'LEAVES' })}
           >
             <View style={[styles.tileIconBox, { backgroundColor: '#EEF2FF' }]}>
               <Icon name="calendar" size={18} color={palette.primary} />
@@ -183,7 +189,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={[styles.actionTile, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
-            onPress={() => navigation.navigate('MyHRTickets')}
+            onPress={() => navigation.navigate('Work & Requests', { initialTab: 'TICKETS' })}
           >
             <View style={[styles.tileIconBox, { backgroundColor: '#FEF3C7' }]}>
               <Icon name="ticket" size={18} color="#D97706" />
@@ -264,51 +270,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
   },
-  welcomeSub: {
-    fontSize: 12,
-    marginTop: 2,
-  },
   card: {
     borderRadius: 12,
     borderWidth: 1,
     padding: 16,
     marginBottom: 14,
     elevation: 1,
-  },
-  presenceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  activePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    gap: 6,
-  },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#16A34A',
-  },
-  activePillText: {
-    color: '#16A34A',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  terminalText: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  presenceDesc: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginBottom: 14,
   },
   checkoutBtn: {
     flexDirection: 'row',

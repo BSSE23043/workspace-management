@@ -1,44 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   TextInput,
   KeyboardAvoidingView,
   Platform,
   Alert,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
 import {
+  loadTickets,
   resolveTicket,
-  rejectTicket,
   addTicketMessage,
   markInProgress,
   reopenTicket,
-} from '../../store/slices/ticketsSlice';
-import { overrideAttendance } from '../../store/slices/attendanceSlice';
+} from '../../services/ticketService';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
-import { IMAGES } from '../../assets/images';
+// Shared "time ago" label — same one the requirement broadcasts use.
+import { timeAgo } from '../../utils/timeAgo';
 
 export const HRTicketDetailScreen = ({ navigation, route }) => {
-  const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
 
   const ticketId = route?.params?.ticketId;
-  const { tickets } = useSelector((state) => state.tickets);
+
+  // Tickets live in AsyncStorage — load on demand (mount + focus). Every
+  // handler below saves the mutated list and refreshes local state, so the
+  // status, timeline and closed/open UI update immediately.
+  const [tickets, setTickets] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setTickets(await loadTickets());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
+
   const ticket = tickets.find((t) => t.id === ticketId);
 
   const [replyText, setReplyText] = useState('');
 
-  const isOverrideType = ticket?.category === 'Attendance Correction';
+  // Closed / terminal tickets are read-only: HR can read the thread but not
+  // post new messages until the ticket is reopened.
+  const isClosed = ticket?.status === 'RESOLVED' || ticket?.status === 'REJECTED';
 
   const handleCloseTicket = () => {
     Alert.alert(
@@ -48,13 +62,12 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
         { text: 'Cancel', style: 'cancel' },
         {
           text: '✓ Resolve & Close',
-          onPress: () => {
-            dispatch(
-              resolveTicket({
-                ticketId: ticket.id,
-                replyMessage: 'Ticket reviewed, resolved and officially closed by HR Operations.',
-              })
-            );
+          onPress: async () => {
+            const next = await resolveTicket({
+              ticketId: ticket.id,
+              replyMessage: 'Ticket reviewed, resolved and officially closed by HR Operations.',
+            });
+            setTickets(next);
             Alert.alert('Ticket Closed', `Ticket #${ticket.id} is now closed and marked RESOLVED.`);
           },
         },
@@ -62,97 +75,38 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
     );
   };
 
-  const handleSetInProgress = () => {
-    dispatch(
-      markInProgress({
-        ticketId: ticket.id,
-        note: 'HR Operations has picked up this ticket. Active investigation with IT/Payroll underway.',
-      })
-    );
+  const handleSetInProgress = async () => {
+    const next = await markInProgress({
+      ticketId: ticket.id,
+      note: 'HR Operations has picked up this ticket. Active investigation with IT/Payroll underway.',
+    });
+    setTickets(next);
     Alert.alert('Status Updated', `Ticket #${ticket.id} moved to IN_PROGRESS.`);
   };
 
-  const handleReopen = () => {
-    dispatch(
-      reopenTicket({
-        ticketId: ticket.id,
-        note: 'Ticket reopened by HR Operations for follow-up review.',
-      })
-    );
+  const handleReopen = async () => {
+    const next = await reopenTicket({
+      ticketId: ticket.id,
+      note: 'Ticket reopened by HR Operations for follow-up review.',
+    });
+    setTickets(next);
     Alert.alert('Ticket Reopened', `Ticket #${ticket.id} has been reopened.`);
   };
 
-  const handleApproveOverride = () => {
-    Alert.alert(
-      'Confirm Attendance Override',
-      `Approve physical sign-out adjustment for ${ticket.userName}? This will automatically recalculate salary and mark attendance as CORRECTED_PRESENT.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: '✓ Approve & Override',
-          onPress: () => {
-            // 1. Resolve ticket
-            dispatch(
-              resolveTicket({
-                ticketId: ticket.id,
-                replyMessage: 'Attendance override approved by HR Operations based on attached security sign-out proof.',
-              })
-            );
-            // 2. Dispatch attendanceSlice override
-            dispatch(
-              overrideAttendance({
-                userId: ticket.userId,
-                userName: ticket.userName,
-                date: ticket.date,
-                checkInTime: ticket.requestedIn || '09:00 AM',
-                checkOutTime: ticket.requestedOut || '05:00 PM',
-                note: `HR Corrected via #${ticket.id} (Physical sign-in override)`,
-              })
-            );
-
-            Alert.alert(
-              'Override Approved',
-              `Attendance log for ${ticket.userName} updated to CORRECTED_PRESENT. Salary deductions recalculated to 0.`,
-              [{ text: 'OK', onPress: () => navigation.goBack() }]
-            );
-          },
-        },
-      ]
-    );
-  };
-
-  const handleRejectOverride = () => {
-    Alert.alert('Reject Ticket', `Reject override request #${ticket.id}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reject Request',
-        style: 'destructive',
-        onPress: () => {
-          dispatch(
-            rejectTicket({
-              ticketId: ticket.id,
-              replyMessage: 'Override request rejected by HR Operations due to insufficient documentation.',
-            })
-          );
-          Alert.alert('Ticket Rejected', 'Ticket status updated to REJECTED.', [
-            { text: 'OK', onPress: () => navigation.goBack() },
-          ]);
-        },
-      },
-    ]);
-  };
-
-  const handleSendReply = () => {
-    if (!replyText.trim()) return;
-    dispatch(
-      addTicketMessage({
-        ticketId: ticket.id,
-        sender: `${currentUser?.name || 'HR'} (HR)`,
-        message: replyText.trim(),
-      })
-    );
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !ticket) return;
+    const next = await addTicketMessage({
+      ticketId: ticket.id,
+      sender: `${currentUser?.name || 'HR'} (HR)`,
+      message: replyText.trim(),
+    });
+    setTickets(next);
     setReplyText('');
   };
+
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   if (!ticket) {
     return (
@@ -180,7 +134,7 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
     >
       <HeaderBar
         title={`Ticket #${ticket?.id}`}
-        subtitle={ticket?.category || 'HR Ticket'}
+        subtitle="HR Ticket"
         showBack
         navigation={navigation}
       />
@@ -208,78 +162,7 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* Linked Attendance Override Comparison Card */}
-        {isOverrideType && (
-          <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <View style={styles.cardHeaderRow}>
-              <Icon name="time" size={16} color={palette.primary} />
-              <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
-                Linked Attendance Override Comparison
-              </Text>
-            </View>
-
-            <View style={styles.comparisonGrid}>
-              <View style={[styles.comparisonBox, styles.currentBox]}>
-                <Text style={styles.comparisonLabel}>Current System Log</Text>
-                <Text style={styles.comparisonValue}>{ticket?.currentSystemLog || '—'}</Text>
-              </View>
-
-              <View style={[styles.comparisonBox, styles.proposedBox]}>
-                <Text style={[styles.comparisonLabel, { color: '#0F766E' }]}>Proposed Adjustment</Text>
-                <Text style={[styles.comparisonValue, { color: '#0F766E' }]}>
-                  {ticket?.proposedAdjustment || '—'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Attached Evidence Preview */}
-            {Boolean(ticket?.evidenceName) && (
-              <View>
-                <Text style={[styles.evidenceLabel, { color: palette.textPrimary }]}>
-                  Attached Evidence — {ticket.evidenceName}
-                </Text>
-                {Boolean(ticket?.evidenceImageKey) && IMAGES[ticket.evidenceImageKey] ? (
-                  <View style={styles.evidenceContainer}>
-                    <Image
-                      source={IMAGES[ticket.evidenceImageKey]}
-                      style={styles.evidenceImage}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.evidenceOverlay}>
-                      <Icon name="document-text" size={14} color="#FFFFFF" />
-                      <Text style={styles.evidenceFilename}>{ticket.evidenceName}</Text>
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-            )}
-
-            {/* Override Action Buttons */}
-            {ticket?.status === 'OPEN' && (
-              <View style={styles.overrideActionsRow}>
-                <TouchableOpacity
-                  style={[styles.approveBtn, { backgroundColor: palette.primary }]}
-                  onPress={handleApproveOverride}
-                  activeOpacity={0.85}
-                >
-                  <Icon name="checkmark-circle" size={16} color="#FFFFFF" />
-                  <Text style={styles.approveBtnText}>✓ Approve & Override Attendance</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.rejectBtn}
-                  onPress={handleRejectOverride}
-                  activeOpacity={0.85}
-                >
-                  <Icon name="close-circle" size={16} color="#DC2626" />
-                  <Text style={styles.rejectBtnText}>Reject Override Request</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* HR Ticket Lifecycle & Close Controls (Available for all ticket categories) */}
+        {/* HR Ticket Lifecycle & Close Controls (Available for every ticket) */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
             HR Ticket Lifecycle & Resolution Controls
@@ -352,29 +235,35 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
               <View key={idx} style={[styles.timelineItem, { borderColor: palette.divider }]}>
                 <View style={styles.timelineHeader}>
                   <Text style={[styles.timelineSender, { color: palette.textPrimary }]}>{msg.sender}</Text>
-                  <Text style={styles.timelineTime}>{msg.time}</Text>
+                  <Text style={styles.timelineTime}>{timeAgo(msg.createdAt) || msg.time}</Text>
                 </View>
                 <Text style={[styles.timelineMessage, { color: palette.textSecondary }]}>{msg.message}</Text>
               </View>
             ))}
           </View>
 
-          {/* Reply input */}
-          <View style={styles.replyRow}>
-            <TextInput
-              value={replyText}
-              onChangeText={setReplyText}
-              placeholder="Post an official note or reply..."
-              placeholderTextColor="#94A3B8"
-              style={[styles.replyInput, { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder, color: palette.textPrimary }]}
-            />
-            <TouchableOpacity
-              style={[styles.sendReplyBtn, { backgroundColor: palette.primary }]}
-              onPress={handleSendReply}
-            >
-              <Text style={styles.sendReplyText}>Reply</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Reply input — hidden once the ticket is closed */}
+          {isClosed ? (
+            <Text style={[styles.closedNote, { color: palette.textSecondary }]}>
+              This ticket is closed — the discussion is read-only. Reopen it to post a reply.
+            </Text>
+          ) : (
+            <View style={styles.replyRow}>
+              <TextInput
+                value={replyText}
+                onChangeText={setReplyText}
+                placeholder="Post an official note or reply..."
+                placeholderTextColor="#94A3B8"
+                style={[styles.replyInput, { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder, color: palette.textPrimary }]}
+              />
+              <TouchableOpacity
+                style={[styles.sendReplyBtn, { backgroundColor: palette.primary }]}
+                onPress={handleSendReply}
+              >
+                <Text style={styles.sendReplyText}>Reply</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -458,100 +347,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  comparisonGrid: {
-    gap: 8,
-    marginBottom: 14,
-  },
-  comparisonBox: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  currentBox: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#FCA5A5',
-  },
-  proposedBox: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#99F6E4',
-  },
-  comparisonLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#DC2626',
-    textTransform: 'uppercase',
-  },
-  comparisonValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#DC2626',
-    marginTop: 2,
-  },
-  evidenceLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  evidenceContainer: {
-    height: 160,
-    borderRadius: 8,
-    overflow: 'hidden',
-    position: 'relative',
-    marginBottom: 14,
-    backgroundColor: '#E2E8F0',
-  },
-  evidenceImage: {
-    width: '100%',
-    height: '100%',
-  },
-  evidenceOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-    padding: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  evidenceFilename: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  overrideActionsRow: {
-    gap: 10,
-  },
-  approveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    paddingVertical: 12,
-    gap: 6,
-  },
-  approveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  rejectBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    paddingVertical: 10,
-    gap: 6,
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-  },
-  rejectBtnText: {
-    color: '#DC2626',
-    fontSize: 12,
-    fontWeight: '700',
-  },
   timelineList: {
     gap: 10,
     marginTop: 10,
@@ -601,6 +396,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+  // Shown in place of the reply box once the ticket is closed.
+  closedNote: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
   },
   lifecycleSub: {
     fontSize: 11,

@@ -71,27 +71,6 @@ export const EmployeeProfileScreen = ({ navigation }) => {
           <Text style={[styles.userEmail, { color: palette.textSecondary }]}>{currentUser?.email}</Text>
         </View>
 
-        {/* Telemetry & Leave Quota Row */}
-        <View style={[styles.quotaCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <Text style={[styles.quotaHeading, { color: palette.textPrimary }]}>Telemetry &amp; Leave Quota</Text>
-          <View style={styles.quotaRow}>
-            <View style={styles.quotaItem}>
-              <Text style={[styles.quotaVal, { color: palette.primary }]}>14</Text>
-              <Text style={[styles.quotaSub, { color: palette.textSecondary }]}>Annual Leave</Text>
-            </View>
-            <View style={styles.quotaDivider} />
-            <View style={styles.quotaItem}>
-              <Text style={[styles.quotaVal, { color: '#2563EB' }]}>06</Text>
-              <Text style={[styles.quotaSub, { color: palette.textSecondary }]}>Medical Leave</Text>
-            </View>
-            <View style={styles.quotaDivider} />
-            <View style={styles.quotaItem}>
-              <Text style={[styles.quotaVal, { color: '#16A34A' }]}>96%</Text>
-              <Text style={[styles.quotaSub, { color: palette.textSecondary }]}>Presence Rate</Text>
-            </View>
-          </View>
-        </View>
-
         {/* Personal Information (STRICTLY READ-ONLY LOCKED) */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <View style={styles.lockedHeaderRow}>
@@ -118,24 +97,6 @@ export const EmployeeProfileScreen = ({ navigation }) => {
             value={currentUser?.email || ''}
             editable={false}
           />
-
-          <AppInput
-            label="Mobile Contact"
-            value={currentUser?.phone || '+92 333 1122334'}
-            editable={false}
-          />
-
-          <AppInput
-            label="Emergency Primary Contact"
-            value={currentUser?.emergencyContact || 'Mrs. Raza (+92 345 9988776)'}
-            editable={false}
-          />
-
-          <AppInput
-            label="Residential Address"
-            value={currentUser?.address || 'House 42, St 9, F-10/2, Islamabad'}
-            editable={false}
-          />
         </View>
 
         {/* Employment & Assignment (STRICTLY READ-ONLY LOCKED) */}
@@ -153,24 +114,6 @@ export const EmployeeProfileScreen = ({ navigation }) => {
           <AppInput
             label="Assigned Reporting Manager"
             value={currentUser?.reportsTo || '—'}
-            editable={false}
-          />
-
-          <AppInput
-            label="Designated Geofence Campus"
-            value="Lahore Campus • Building B (200m Perimeter)"
-            editable={false}
-          />
-
-          <AppInput
-            label="Shift Schedule"
-            value="Mon-Fri • 09:00 - 18:00 PKT"
-            editable={false}
-          />
-
-          <AppInput
-            label="Monthly Base Bracket"
-            value="150,000 PKR / month"
             editable={false}
           />
           {/* Note: NO "Update Personal Info" button is rendered per blueprint specification */}
@@ -276,38 +219,6 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 12,
     marginBottom: 12,
-  },
-  quotaCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 16,
-  },
-  quotaHeading: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  quotaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  quotaItem: {
-    alignItems: 'center',
-  },
-  quotaVal: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  quotaSub: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  quotaDivider: {
-    width: 1,
-    height: 26,
-    backgroundColor: '#E2E8F0',
   },
   card: {
     borderRadius: 12,
