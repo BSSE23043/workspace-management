@@ -15,7 +15,7 @@ import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import DatePickerModal from '../../components/common/DatePickerModal';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
-import { PUNCH_DUTY_ROLES, isWeekday, attendanceTrackingStart } from '../../utils/attendanceStats';
+import { PUNCH_DUTY_ROLES, isWeekday, attendanceTrackingStart, isOnApprovedLeave } from '../../utils/attendanceStats';
 
 export const CompanyAttendanceScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
@@ -56,7 +56,19 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
   // log that day (working days only, and only for dates up to today).
   // The logged-in HR never sees their own row — staff only.
   const dateLogs = useMemo(() => {
-    const real = logs.filter((l) => l.date === selectedDate && l.userId !== currentUser?.id);
+    // Real records for the date. If HR approved a leave covering this date, any
+    // record WITHOUT a verified punch (e.g. an ABSENT / geofence-fail log) is
+    // shown as ON_LEAVE instead — an approved leave always beats an absence.
+    // Confirmed punches (PRESENT / CORRECTED_PRESENT) are never overridden.
+    const real = logs
+      .filter((l) => l.date === selectedDate && l.userId !== currentUser?.id)
+      .map((l) => {
+        const hasVerifiedPunch = l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT';
+        if (!hasVerifiedPunch && isOnApprovedLeave(leaves, l.userId, selectedDate)) {
+          return { ...l, status: 'ON_LEAVE', statusCategory: 'APPROVED LEAVE' };
+        }
+        return l;
+      });
     const realUserIds = new Set(real.map((l) => l.userId));
     const synth = [];
     // Absences only count from the day tracking began (first-ever log; today
@@ -72,13 +84,7 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
         )
         .filter((u) => !realUserIds.has(u.id))
         .forEach((u) => {
-          const onLeave = leaves.some(
-            (l) =>
-              l.userId === u.id &&
-              l.status === 'APPROVED' &&
-              l.startDate <= selectedDate &&
-              l.endDate >= selectedDate
-          );
+          const onLeave = isOnApprovedLeave(leaves, u.id, selectedDate);
           synth.push({
             id: `SYNTH-${u.id}-${selectedDate}`,
             userId: u.id,
@@ -206,17 +212,19 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
         <View style={styles.detailItem}>
           <Icon name="time" size={13} color="#64748B" />
           <Text style={[styles.detailText, { color: palette.textPrimary }]}>
-            {item.synthesized
-              ? item.status === 'ON_LEAVE'
-                ? 'Approved Leave — No Punch Required'
-                : 'No Punch Recorded'
+            {item.status === 'ON_LEAVE'
+              ? 'Approved Leave — No Punch Required'
+              : item.synthesized
+              ? 'No Punch Recorded'
               : `${item.checkInTime || 'No Punch'} ${item.checkOutTime ? `→ ${item.checkOutTime}` : '• Open'}`}
           </Text>
         </View>
         <View style={styles.detailItem}>
           <Icon name="location" size={13} color="#64748B" />
           <Text style={[styles.detailText, { color: palette.textPrimary }]}>
-            {item.synthesized
+            {item.status === 'ON_LEAVE'
+              ? '—'
+              : item.synthesized
               ? '—'
               : item.distanceMeters !== undefined
               ? `${item.distanceMeters}m radius`
