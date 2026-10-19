@@ -23,7 +23,10 @@
 - **Backend:** **NONE.** The app is fully offline/seed-driven. Most domain data lives in Redux
   (in-memory, seeded from `src/data/seedData.js`); the auth session is mirrored to AsyncStorage.
   **Users are NOT in Redux at all** — AsyncStorage `@wms_users` is the single source of truth and
-  every screen loads the user list from it with local `useState`/`useEffect`. The
+  every screen loads the user list from it with local `useState`/`useEffect`. **Tasks and
+  requirements are NOT in Redux either** — AsyncStorage `@wms_tasks` / `@wms_requirements` are the
+  source of truth, read on demand by `services/taskService.js` / `services/requirementService.js`
+  (screens load them on mount + focus into local state; mutations read→change→write). The
   user database is not seeded — it starts empty; accounts only exist via the Super Admin flow.
   No HTTP/network calls anywhere (the `fetch` demos were removed with the
   announcements feature — `fetch` is not in the syllabus concepts list).
@@ -101,7 +104,7 @@ repo/                                  (git root; branches: main, Samer, Umar[cu
 - **Geofence** (`src/utils/geofence.js`): Haversine distance; punch blocked outside office radius (default **200 m**, Lahore campus 31.5204/74.3587).
 - **Salary** (`src/utils/salaryCalculator.js`): `unexcused = W − (present + paidLeave + unpaidLeave)`;
   `net = base − (unexcused × rateAbsent + unpaidLeave × rateUnpaid) + allowances`; W=22, 5000/3500 PKR rates; currency PKR.
-- **Dual-deadline conflict** (`tasksSlice`): tasks carry internal engineer due vs external client due;
+- **Dual-deadline conflict** (`src/services/taskService.js`): tasks carry internal engineer due vs external client due;
   `bufferDays`, `hasConflict` computed at `createTask`.
 
 ## 5. Source Map (`src/`)
@@ -118,8 +121,9 @@ src/
 │                           + SEED_NOTIFICATIONS **removed**
 ├── navigation/             AppNavigator + 5 role navigators + SuperAdminNavigator (see §4)
 ├── screens/                34 screens (see §6)
-├── services/               storageService.js (AsyncStorage + seed/reset)
-├── store/                  index.js + slices/ (7 slices, see §7)
+├── services/               storageService.js (AsyncStorage + seed/reset),
+│                           taskService.js + requirementService.js (load/save + mutations)
+├── store/                  index.js + slices/ (5 slices, see §7)
 └── utils/                  geofence.js, imagePicker.js, permissions.js, salaryCalculator.js, superAdminConfig.js, validation.js
 ```
 
@@ -179,8 +183,10 @@ active toggle (persisted to AsyncStorage); **loads users from AsyncStorage** (mo
 **company-scoped**: if `currentUser.companyId` exists, only users with the same
 companyId are listed), `EmployeeFormScreen` (add/edit user — role picker only, **no department
 picker**; **gallery DP picker** (real device gallery via `launchImageLibrary`), manager hierarchy; **loads users from AsyncStorage**, waits for load
-before rendering; **company-scoped** manager options; saves only to AsyncStorage with the admin's
-`companyId`), `AdminProfileScreen` (only editable profile).
+before rendering; **company-scoped** manager options; **email must be unique across every stored
+account of any role/company** (re-reads the full `@wms_users` list on save and refuses the save
+with an alert otherwise, excluding the record being edited); saves only to AsyncStorage with the
+admin's `companyId`), `AdminProfileScreen` (only editable profile).
 ~~`AnnouncementsFeedScreen`~~ + ~~`NotificationsScreen`~~ **deleted** (features not implemented;
 also removed from the admin drawer).
 
@@ -201,8 +207,14 @@ present/on-leave/absent counts, empty state), `TeamLeaveRequestsScreen` (team-fi
 (status tabs, create task w/ multi-assignee + dual deadlines + live conflict warning; engineer picker =
 real team; guards for no team / no assignee), `TaskDetailScreen` (progress, notes, edit modal, milestone
 sync toggle; real team, today-based date defaults), `RequirementCoordinationScreen` (requirements list
-guarded by an empty state, required Client Organization input, milestones, lifecycle state, private-task
-links from the selected requirement, client broadcasts authored by the current user),
+guarded by an empty state, **Client Organization dropdown** — the Company Admin's `CLIENT` accounts for
+this manager's company, read from AsyncStorage, with loading/no-clients notes and a required selection
+that stamps `organization` + `clientId` + `clientEmail`/`clientRepresentative` onto the requirement,
+milestones (add row + **minus button per milestone with a confirm dialog → `removeMilestone`**,
+progress recalculated), lifecycle state, private-task links
+from the selected requirement, client broadcasts authored by the current user **plus a
+"Published Broadcasts" history right under the publish button** — shows each broadcast's author
+(`b.author`) and a `timeAgo(b.createdAt)` label, with an empty note before the first publish),
 `ManagerProfileScreen` (read-only + DP upload; no stats/pulse card).
 
 **employee/** — `EmployeeDashboardScreen` (attendance card w/ geofence distance, salary estimate),
@@ -212,17 +224,24 @@ outside), `MySalaryEstimateScreen` (transparent payslip, month cycles), `WorkAnd
 types, date range, overlap validation), `MyHRTicketsScreen` (3 categories, correction details sub-card),
 `MyTasksScreen` (status tabs, quick % progress), `EmployeeProfileScreen`.
 
-**client/** — `ClientDashboardScreen` (deliverable KPIs, no submit button), `MyRequirementsScreen`
-(milestone checklist read-only + clarification replies), `ProfileSettingsScreen` (**class component**
+**client/** — both requirement screens are **scoped to the logged-in client**: they filter on
+`r.clientId === currentUser.id` (set by the manager's Client Organization dropdown at creation time),
+so a client only ever sees requirements created against its own account, and render an empty-state
+card when there are none; headers use `currentUser.name`. `ClientDashboardScreen` (deliverable KPIs, no
+submit button), `MyRequirementsScreen` (milestone checklist read-only + clarification replies,
+author = `currentUser.name`), `ProfileSettingsScreen` (**class component**
 reading `currentUser` from AuthContext via `static contextType`; DP updates go through
 `updateCurrentUser` → session + AsyncStorage).
 
 ## 7. Redux Store
 
-`configureStore({ company, attendance, salary, leaves, tickets, tasks, requirements })`.
+`configureStore({ company, attendance, salary, leaves, tickets })`.
 **State is in-memory only — NOT rehydrated from AsyncStorage**
 (only the auth session + company profile persist). All reducers synchronous. **No users slice** — the user list
 lives exclusively in AsyncStorage `@wms_users`; screens load it into local state.
+**No `tasks` / `requirements` slices** — those datasets live in AsyncStorage `@wms_tasks` /
+`@wms_requirements` and are read/written through `services/taskService.js` and
+`services/requirementService.js` (screens hold them in local `useState`, load on mount + focus).
 
 | Slice | State | Notable actions |
 |---|---|---|
@@ -231,10 +250,9 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
 | salary | `{ companyWide, overrides{} }` | updateCompanySalaryConfig, updateEmployeeSalaryOverride |
 | leaves | `{ leaves[] }` | applyLeave (PENDING), approveLeave, rejectLeave |
 | tickets | `{ tickets[] }` | createTicket (timeline), markInProgress, resolveTicket, reopenTicket, rejectTicket, addTicketMessage |
-| tasks | `{ tasks[] }` | createTask (computes bufferDays/hasConflict), editTask, updateTaskStatus, toggleMilestoneSync, addTaskLog, rescheduleTask |
-| requirements | `{ requirements[] }` | addRequirement, toggleMilestone, addMilestone, publishBroadcast, addClientClarificationReply, updateLifecycleState |
 
-~~`announcements`~~ + ~~`notifications`~~ slices **deleted** (features removed).
+~~`announcements`~~ + ~~`notifications`~~ slices **deleted** (features removed);
+~~`tasks`~~ + ~~`requirements`~~ slices **deleted** (moved to AsyncStorage — see §8).
 
 ## 8. Services & Storage
 
@@ -242,6 +260,20 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
   `initializeSeedDataIfNeeded()` (first-run seed via `@wms_app_initialized` + one-time demo-user
   purge via `@wms_demo_users_cleaned`); `resetToSeedData()` (multiSet of all domain data;
   now internal only — the Admin drawer reset button was removed).
+- **`taskService.js`** — tasks no longer in Redux. `loadTasks()` / `saveTasks()` over
+  `@wms_tasks`; mutations `createTask` (computes bufferDays/hasConflict), `editTask`,
+  `updateTaskStatus`, `toggleMilestoneSync`, `addTaskLog`. Each mutation does
+  read → change → write → returns the fresh array, so screens do
+  `setTasks(await createTask({...}))`.
+- **`requirementService.js`** — same pattern over `@wms_requirements`:
+  `loadRequirements()` / `saveRequirements()`; mutations `addRequirement`, `toggleMilestone`,
+  `addMilestone`, `removeMilestone`, `publishBroadcast`, `addClientClarificationReply`,
+  `updateLifecycleState`. A shared `recount()` helper keeps completed/total/progress % in sync.
+- Consumer screens: ManagerDashboard, TaskManagement, TaskDetail, RequirementCoordination
+  (manager); MyTasks, EmployeeDashboard (employee); ClientDashboard, MyRequirements (client).
+  Each holds the list in local `useState`, loads on mount **and on
+  `navigation.addListener('focus')`** (tab screens stay mounted), and gates the first render
+  with an `isDataLoaded` flag so empty states don't flash.
 - ~~`networkService.js`~~ **deleted** (only existed for the announcements feature's `fetch` demo).
 
 ## 9. Seed Data Highlights (`src/data/seedData.js`)
@@ -270,8 +302,9 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
 
 ## 10. Known Caveats / Tech Debt
 
-- No backend; Redux resets on app reload (auth session persists; users persist in AsyncStorage and
-  are loaded into local state by each screen).
+- No backend; the 5 Redux slices reset on app reload (auth session persists; users persist in
+  AsyncStorage and are loaded into local state by each screen; tasks/requirements persist in
+  AsyncStorage and survive reloads — they are the data a reload used to destroy).
 - Plaintext passwords in AsyncStorage; Super Admin credentials hardcoded in `superAdminConfig.js` (fine for a course project).
 - Removing a Company Admin only removes them from AsyncStorage USERS (an already-open session of theirs would persist until logout).
 - All image assets are 1x1-px placeholder stubs (blueprint lists required real images).
@@ -293,6 +326,114 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
 
 ## Changelog (append every change/pull/merge on `Umar`)
 
+- **2026-10-19** — **Removed the "Leave Review & Approvals" navigation row from the Manager dashboard.**
+  - `ManagerDashboardScreen` "Management Controls" list is now 3 rows (Assigned Team Attendance,
+    Team Task Board & Dual Deadlines, Client Requirement Sync); the leave-approval row was a
+    duplicate entry point into the same `Team & Leave` screen the attendance row already opens.
+  - The `Team & Leave` screen, its route, and the pending-leave KPI on the dashboard are untouched —
+    only the dashboard row was deleted. All 64 src files parse clean.
+- **2026-10-19** — **Tasks & requirements removed from Redux entirely; AsyncStorage is now the
+  single source of truth for both (loaded on demand).**
+  - Why: the store was never rehydrated, so any requirement/task existed only in memory —
+    creating one and reloading the app made it vanish. `@wms_tasks` / `@wms_requirements` were
+    written at first-run seed (`[]`) but never read back.
+  - **Deleted** `store/slices/tasksSlice.js` + `store/slices/requirementsSlice.js`;
+    `store/index.js` is now **5 slices** (`company, attendance, salary, leaves, tickets`).
+  - **New** `services/taskService.js` — `loadTasks()` / `saveTasks()` over `@wms_tasks` plus the
+    reducer logic moved verbatim into async mutations: `createTask` (bufferDays/hasConflict math),
+    `editTask`, `updateTaskStatus`, `toggleMilestoneSync`, `addTaskLog`. Unused `rescheduleTask` /
+    `resetTasks` dropped.
+  - **New** `services/requirementService.js` — same pattern over `@wms_requirements`:
+    `addRequirement` (keeps `clientId`/`clientEmail`), `toggleMilestone`, `addMilestone`,
+    `removeMilestone`, `publishBroadcast` (stamps `createdAt`), `addClientClarificationReply`,
+    `updateLifecycleState`; shared `recount()` keeps completed/total/progress % in sync; unused
+    `resetRequirements` dropped. Every mutation does read → change → write → returns the fresh
+    array, so screens just `setRequirements(await publishBroadcast({...}))`.
+  - **Migrated all 8 consumer screens** off `useSelector`/`useDispatch` for these datasets:
+    ManagerDashboard, TaskManagement, TaskDetail, RequirementCoordination, MyTasks,
+    EmployeeDashboard, ClientDashboard, MyRequirements. Each keeps the list in local `useState`,
+    loads on mount **and on `navigation.addListener('focus')`** (allowed concept; tab screens stay
+    mounted so focus is what keeps them fresh), and gates the first render with an `isDataLoaded`
+    flag so empty states/KPIs don't flash while storage is being read.
+  - `TaskDetailScreen` also gained a graceful "task no longer exists" state (its render used an
+    unguarded `task.assignedToNames`, which would have crashed on a truly empty list).
+  - Kept in Redux untouched: attendance, leaves, tickets, salary, company (+ all their dispatch
+    sites). `SEED_TASKS`/`SEED_REQUIREMENTS` stay `[]` purely so the first-run seed can write the
+    keys. Verified: no `state.tasks`/`state.requirements`/slice imports remain anywhere, and all
+    64 src files parse clean (Babel walk).
+  - Not done (deferred to a later step, per user): moving the `theme` value out of
+    `ThemeContext` into Redux.
+- **2026-10-19** — **Manager now sees the broadcasts he publishes (author + time ago).**
+  - Bug: the "Publish Client-Visible Progress Update" card had no output — a broadcast was dispatched
+    and confirmed with an alert, but the requirement screen never rendered `broadcasts`, so the
+    manager had no way to read back what he had sent.
+  - `requirementsSlice.publishBroadcast`: now also stamps `createdAt: Date.now()` on each broadcast
+    (`time: 'Just now'` kept so the client screens' existing `b.time` usage is untouched).
+  - `RequirementCoordinationScreen`: new module-level `timeAgo(createdAt)` helper (→ `Just now`,
+    `Xm ago`, `Xh ago`, else `D Mon, H:MM`, no library) and a "Published Broadcasts ({targetReq.code})"
+    list directly under the publish button, rendered from `targetReq.broadcasts` — i.e. the same
+    requirement the target chips point at, so a freshly published broadcast shows immediately.
+    Each item shows the publisher (`b.author`, e.g. "Umar (Engineering Manager)"), the time-ago on
+    the right, and the content; empty state before the first publish. New `broadcastHistory*` styles.
+  - Client-facing `time`/author display and the publish flow itself are unchanged; no dependency or
+    concept added. All 64 src files parse clean.
+- **2026-10-19** — **Requirement milestones can be removed (minus button next to each milestone).**
+  - `requirementsSlice`: new `removeMilestone({ reqId, milestoneId })` reducer filters the milestone
+    out and then recalculates `completedMilestones` / `totalMilestones` / `progressPercent` (0% when
+    none are left), mirroring the existing `toggleMilestone` bookkeeping; exported alongside the
+    other actions.
+  - `RequirementCoordinationScreen`: a circular minus button now sits at the end of every row in the
+    "Client Deliverable Milestones" list (the row's `flex: 1` title keeps it right-aligned). It
+    nests inside the row's toggle `TouchableOpacity`, so tapping the minus removes instead of
+    ticking the milestone. `handleRemoveMilestone` shows an `Alert` confirm (Cancel / Remove,
+    destructive) before dispatching. New `removeMilestoneBtn`/`removeMilestoneBtnText` styles.
+  - Clients stay review-only: they simply see the shorter list and the recalculated progress on
+    dashboard + Milestones tab. No dependency or concept added; all 64 src files parse clean.
+- **2026-10-19** — **Requirement creation now picks the client from a dropdown; requirements are
+  attached to (and only visible to) that client.**
+  - `RequirementCoordinationScreen`: the free-text "Client Organization" `AppInput` is gone. In its
+    place is a dropdown (select button + expandable option list) fed by `useEffect` →
+    `storageService.getItem(STORAGE_KEYS.USERS)` filtered to `role === 'CLIENT'` **and the manager's
+    `companyId`** (all clients if the manager has no company tag) — i.e. exactly the clients the
+    Company Admin provisioned for that company. Each option shows name + email; loading, no-clients
+    ("ask your Company Admin…") and "select a client…" placeholder states are handled.
+  - Creating a requirement now requires a selected client and dispatches
+    `organization = client.name`, `clientRepresentative = client.email || client.name`,
+    `clientId`, `clientEmail` + the existing title/deadline; selection resets after save. The dead
+    `orgChip*` styles left from the earlier chips removal were dropped.
+  - `requirementsSlice.addRequirement`: stores `clientId`/`clientEmail` on the requirement; the demo
+    defaults `organization = 'Zafar Corp'` / `clientRepresentative = 'Zafar Ahmed'` became `''`
+    (a requirement can no longer silently attach to a fabricated client).
+  - `ClientDashboardScreen`: renders only `requirements.filter(r => r.clientId === currentUser?.id)`
+    with an empty-state card; header `subtitle` and welcome line now use `currentUser.name` instead
+    of hardcoded "Zafar Corp".
+  - `MyRequirementsScreen`: same `clientId` filter (featured = first match, already null-guarded),
+    empty-state card for the list, clarification author and header subtitle now use `currentUser.name`.
+  - Untouched on purpose: client dashboard KPI tiles still show the hardcoded demo counts
+    (1 / 2 / 1 / 4) — separate leftover, unrelated to client attachment; `ProfileSettingsScreen`
+    still seeds `orgName: 'Zafar Corp'` in its own local state; `DatePickerModal` still fixed to
+    Oct 18, 2026.
+  - No dependency/concept added (`useEffect` + AsyncStorage + ternaries/chips-style lists).
+    All 64 src files parse clean.
+- **2026-10-19** — **Unique email enforced when a Company Admin creates/edits a user.**
+  - Problem: `EmployeeFormScreen` saved whatever email was typed, so two accounts (any roles) could
+    share an email — and login resolves the first match only, silently locking the other account out.
+  - `EmployeeFormScreen`: `handleSave` is now `async`; after the name/format checks it normalizes the
+    email, re-reads the **full** `STORAGE_KEYS.USERS` list (not the company-scoped directory subset,
+    so duplicates in another role, another company or the Super Admin's Company Admin accounts are
+    caught), and refuses the save with a `Validation Error` alert if any stored `u.email` matches
+    case-insensitively — excluding the record being edited (`u.id !== existingUser?.id`) so an
+    unchanged email still saves. The old fire-and-forget persist IIFE became awaited `try/catch`
+    with the same `console.warn`; success alerts unchanged.
+  - Already correct elsewhere: `CompanyAdminsScreen.handleAddAdmin` already performed this exact
+    role-agnostic check; self sign-up was deleted earlier. No other write path creates users.
+  - No dependency or concept added (async/await + `storageService` + `Alert`, all already used).
+    All 64 src files parse clean.
+- **2026-10-19** — **Removed the fake `"TEAM ONLINE"` status badge from the Manager dashboard.**
+  - `ManagerDashboardScreen`: `statusText="TEAM ONLINE"` + `statusColor="#1D4ED8"` replaced with the
+    existing `showStatus={false}` prop (added earlier for the Admin dashboard). Dropping `statusText`
+    alone was not enough because `HeaderBar` defaults it to `'ONLINE'`.
+  - No other screen, prop or dependency touched; `HeaderBar` itself unchanged. Parses clean.
 - **2026-10-19** — **Manager demo data removed; every manager screen now shows only the real team.**
   - `seedData.js`: `SEED_ATTENDANCE`, `SEED_LEAVES`, `SEED_TASKS`, `SEED_REQUIREMENTS` emptied to `[]`
     (the four were only read by the Redux slices' initial state; `storageService` first-run seed now

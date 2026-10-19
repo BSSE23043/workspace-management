@@ -99,7 +99,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
     (u) => u.role === 'MANAGER' || u.role === 'ADMIN'
   );
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSubmitted(true);
     if (!name.trim()) {
       Alert.alert('Validation Error', 'Full Name is required.');
@@ -110,13 +110,34 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
       return;
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Every account type (ADMIN, MANAGER, HR, EMPLOYEE, CLIENT) lives in the same
+    // AsyncStorage user list and logs in with the same lookup, so one email may
+    // only ever belong to ONE user. We re-read the FULL stored list here (not the
+    // company-scoped subset shown in the directory) so a duplicate is caught even
+    // when it belongs to another role, another company, or the super admin's own
+    // Company Admin accounts. On edit we skip our own record so saving an
+    // unchanged email still works.
+    const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+    const emailTaken = (Array.isArray(storedUsers) ? storedUsers : []).some(
+      (u) => (u.email || '').toLowerCase() === normalizedEmail && u.id !== existingUser?.id
+    );
+    if (emailTaken) {
+      Alert.alert(
+        'Validation Error',
+        `The email "${normalizedEmail}" is already registered to another user. Each user must have a unique email address.`
+      );
+      return;
+    }
+
     const mgrObj = scopedUsers.find((u) => u.id === selectedManagerId);
 
     // Users are typed by ROLE only (no departments in the system).
     const userPayload = {
       id: existingUser?.id || `EMP-${Math.floor(100 + Math.random() * 900)}`,
       name: name.trim(),
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       password,
       role,
       managerId: role === 'EMPLOYEE' ? selectedManagerId : null,
@@ -133,17 +154,14 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
     }
 
     // Persist to AsyncStorage — the single source of truth for users.
-    (async () => {
-      try {
-        const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-        const updatedUsers = isEditing
-          ? storedUsers.map((u) => (u.id === userPayload.id ? { ...u, ...userPayload } : u))
-          : [userPayload, ...storedUsers];
-        await storageService.setItem(STORAGE_KEYS.USERS, updatedUsers);
-      } catch (err) {
-        console.warn('[EmployeeForm] Failed persisting user to storage:', err);
-      }
-    })();
+    try {
+      const updatedUsers = isEditing
+        ? storedUsers.map((u) => (u.id === userPayload.id ? { ...u, ...userPayload } : u))
+        : [userPayload, ...storedUsers];
+      await storageService.setItem(STORAGE_KEYS.USERS, updatedUsers);
+    } catch (err) {
+      console.warn('[EmployeeForm] Failed persisting user to storage:', err);
+    }
 
     if (isEditing) {
       Alert.alert('Success', `User record for "${name}" updated successfully.`, [

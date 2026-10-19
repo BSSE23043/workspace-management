@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,16 +8,18 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
+import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import {
+  loadRequirements,
   addRequirement,
   toggleMilestone,
   addMilestone,
+  removeMilestone,
   publishBroadcast,
   updateLifecycleState,
-} from '../../store/slices/requirementsSlice';
-import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+} from '../../services/requirementService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
@@ -25,13 +27,41 @@ import DatePickerModal from '../../components/common/DatePickerModal';
 
 const LIFECYCLE_STATES = ['IN_PROGRESS', 'AWAITING_CLIENT', 'COMPLETED'];
 
+// Turns a broadcast's publish timestamp into a short "time ago" label so the
+// manager can see when each of his broadcasts went out.
+const timeAgo = (createdAt) => {
+  if (!createdAt) return 'Just now';
+  const minutes = Math.floor((Date.now() - createdAt) / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const posted = new Date(createdAt);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const minutePad = posted.getMinutes() < 10 ? `0${posted.getMinutes()}` : `${posted.getMinutes()}`;
+  return `${posted.getDate()} ${months[posted.getMonth()]}, ${posted.getHours()}:${minutePad}`;
+};
+
 export const RequirementCoordinationScreen = ({ navigation }) => {
-  const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
-  const { requirements } = useSelector((state) => state.requirements);
+  // Requirements are NOT in Redux anymore — read them from AsyncStorage on
+  // mount and refresh every time this screen regains focus, so a requirement
+  // created here (or a reply sent by the client) always shows up fresh.
+  const [requirements, setRequirements] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setRequirements(await loadRequirements());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
+
   const [selectedReqId, setSelectedReqId] = useState(null);
   const activeReq = requirements.find((r) => r.id === selectedReqId) || requirements[0] || null;
 
@@ -39,8 +69,31 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDeadline, setNewDeadline] = useState(new Date().toISOString().split('T')[0]);
-  const [newOrg, setNewOrg] = useState('');
   const [calendarVisible, setCalendarVisible] = useState(false);
+
+  // Client Organization dropdown. Clients are CLIENT accounts that the Company
+  // Admin provisioned for this manager's company, so they are read straight from
+  // AsyncStorage (the single source of truth for users) instead of being typed in.
+  const [clients, setClients] = useState([]);
+  const [clientsLoaded, setClientsLoaded] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [showClientPicker, setShowClientPicker] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+      const list = Array.isArray(storedUsers) ? storedUsers : [];
+      // Only clients of the same company as this manager (all clients if the
+      // manager account has no company tag yet).
+      const scoped = currentUser?.companyId
+        ? list.filter((u) => u.companyId === currentUser.companyId)
+        : list;
+      setClients(scoped.filter((u) => u.role === 'CLIENT'));
+      setClientsLoaded(true);
+    })();
+  }, [currentUser?.companyId]);
+
+  const selectedClient = clients.find((c) => c.id === selectedClientId) || null;
 
   // Milestone input
   const [newMilestoneText, setNewMilestoneText] = useState('');
@@ -51,50 +104,88 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
 
   const targetReq = requirements.find((r) => r.id === broadcastTargetReqId) || activeReq;
 
-  const handleCreateRequirement = () => {
+  const handleCreateRequirement = async () => {
     if (!newTitle.trim()) {
       Alert.alert('Validation Error', 'Requirement title is required.');
       return;
     }
-    if (!newOrg.trim()) {
-      Alert.alert('Validation Error', 'Client organization is required.');
+    if (!selectedClient) {
+      Alert.alert('Validation Error', 'Please choose a client organization from the dropdown.');
       return;
     }
-    dispatch(
-      addRequirement({
-        title: newTitle.trim(),
-        organization: newOrg.trim(),
-        contractDeadline: newDeadline,
-      })
-    );
+    // Saves the new requirement to AsyncStorage and refreshes local state with
+    // the saved list (requirementService hands it straight back).
+    const nextReqs = await addRequirement({
+      title: newTitle.trim(),
+      // The chosen client account is attached to the requirement: its name
+      // becomes the organization label and its id/email link the requirement
+      // back to that client, so only that client sees it on their dashboard.
+      organization: selectedClient.name,
+      clientRepresentative: selectedClient.email || selectedClient.name,
+      clientId: selectedClient.id,
+      clientEmail: selectedClient.email || '',
+      contractDeadline: newDeadline,
+    });
+    setRequirements(nextReqs);
     setNewTitle('');
+    setSelectedClientId(null);
     setShowCreateForm(false);
-    Alert.alert('Requirement Created', `New client requirement initialized for ${newOrg.trim()}.`);
+    Alert.alert('Requirement Created', `New client requirement initialized for ${selectedClient.name}.`);
   };
 
-  const handleAddMilestone = () => {
+  const handleAddMilestone = async () => {
     if (!newMilestoneText.trim() || !activeReq?.id) return;
-    dispatch(addMilestone({ reqId: activeReq.id, title: newMilestoneText.trim() }));
+    const nextReqs = await addMilestone({ reqId: activeReq.id, title: newMilestoneText.trim() });
+    setRequirements(nextReqs);
     setNewMilestoneText('');
   };
 
-  const handlePublishBroadcast = () => {
-    if (!broadcastText.trim() || !targetReq?.id) return;
-    dispatch(
-      publishBroadcast({
-        reqId: targetReq.id,
-        author: currentUser?.name
-          ? `${currentUser.name} (Engineering Manager)`
-          : 'Engineering Management',
-        content: broadcastText.trim(),
-      })
+  // Minus button next to a milestone: ask first, then remove it from the
+  // requirement (the service recalculates completed / total / progress %).
+  const handleRemoveMilestone = (milestone) => {
+    if (!activeReq?.id) return;
+    Alert.alert(
+      'Remove Milestone',
+      `Remove "${milestone.title}" from ${activeReq.code}? Progress will be recalculated.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const nextReqs = await removeMilestone({
+              reqId: activeReq.id,
+              milestoneId: milestone.id,
+            });
+            setRequirements(nextReqs);
+          },
+        },
+      ]
     );
+  };
+
+  const handlePublishBroadcast = async () => {
+    if (!broadcastText.trim() || !targetReq?.id) return;
+    const nextReqs = await publishBroadcast({
+      reqId: targetReq.id,
+      author: currentUser?.name
+        ? `${currentUser.name} (Engineering Manager)`
+        : 'Engineering Management',
+      content: broadcastText.trim(),
+    });
+    setRequirements(nextReqs);
     setBroadcastText('');
     Alert.alert(
       'Broadcast Published',
       `Update is now published for ${targetReq.organization} (${targetReq.code}) on their executive dashboard.`
     );
   };
+
+  // Wait for the first AsyncStorage read so the screen doesn't flash its
+  // empty state while real requirements are still loading.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
@@ -169,13 +260,94 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                 placeholder="e.g. Acme Multi-Tenant Auth & Billing"
               />
 
-              {/* Client Organization (free text — real client name) */}
-              <AppInput
-                label="Client Organization *"
-                value={newOrg}
-                onChangeText={setNewOrg}
-                placeholder="e.g. Acme Corporation"
-              />
+              {/* Client Organization — dropdown of the Company Admin's clients */}
+              <Text style={[styles.fieldLabel, { color: palette.textPrimary, marginTop: 10 }]}>
+                Client Organization *
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.clientSelectBtn,
+                  { backgroundColor: palette.inputBackground, borderColor: selectedClient ? palette.primary : palette.inputBorder },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => setShowClientPicker(!showClientPicker)}
+              >
+                <Text
+                  style={[
+                    styles.clientSelectText,
+                    { color: selectedClient ? palette.textPrimary : '#94A3B8' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {selectedClient
+                    ? `${selectedClient.name}${selectedClient.email ? ` — ${selectedClient.email}` : ''}`
+                    : clientsLoaded
+                    ? 'Select a client from your company...'
+                    : 'Loading clients...'}
+                </Text>
+                <Icon
+                  name={showClientPicker ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={palette.primary}
+                />
+              </TouchableOpacity>
+
+              {showClientPicker && (
+                <View
+                  style={[
+                    styles.clientDropdown,
+                    { backgroundColor: palette.background, borderColor: palette.inputBorder },
+                  ]}
+                >
+                  {!clientsLoaded ? (
+                    <Text style={[styles.clientDropdownNote, { color: palette.textSecondary }]}>
+                      Loading clients...
+                    </Text>
+                  ) : clients.length === 0 ? (
+                    <Text style={[styles.clientDropdownNote, { color: palette.textSecondary }]}>
+                      No clients have been added for your company yet. Ask your Company Admin to
+                      provision a CLIENT account first.
+                    </Text>
+                  ) : (
+                    clients.map((client) => {
+                      const isClientSelected = client.id === selectedClientId;
+                      return (
+                        <TouchableOpacity
+                          key={client.id}
+                          style={[
+                            styles.clientOptionRow,
+                            { borderColor: palette.divider },
+                            isClientSelected && { backgroundColor: palette.badge, borderColor: palette.primary },
+                          ]}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setSelectedClientId(client.id);
+                            setShowClientPicker(false);
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.clientOptionName,
+                                { color: isClientSelected ? palette.primary : palette.textPrimary },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {client.name}
+                            </Text>
+                            <Text style={[styles.clientOptionEmail, { color: palette.textSecondary }]} numberOfLines={1}>
+                              {client.email || 'No email on file'}
+                            </Text>
+                          </View>
+                          {isClientSelected && (
+                            <Icon name="checkmark-circle" size={16} color={palette.primary} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </View>
+              )}
 
               {/* Contract Deadline with Calendar Picker */}
               <Text style={[styles.fieldLabel, { color: palette.textPrimary, marginTop: 10 }]}>
@@ -237,11 +409,13 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                     { borderColor: palette.cardBorder },
                     isSelected && { backgroundColor: palette.primary, borderColor: palette.primary },
                   ]}
-                  onPress={() =>
-                    dispatch(
-                      updateLifecycleState({ reqId: activeReq.id, lifecycleState: st })
-                    )
-                  }
+                  onPress={async () => {
+                    const nextReqs = await updateLifecycleState({
+                      reqId: activeReq.id,
+                      lifecycleState: st,
+                    });
+                    setRequirements(nextReqs);
+                  }}
                 >
                   <Text
                     style={[
@@ -273,7 +447,13 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
               <TouchableOpacity
                 key={m.id}
                 style={[styles.milestoneCheckRow, { borderColor: palette.divider }]}
-                onPress={() => dispatch(toggleMilestone({ reqId: activeReq.id, milestoneId: m.id }))}
+                onPress={async () => {
+                  const nextReqs = await toggleMilestone({
+                    reqId: activeReq.id,
+                    milestoneId: m.id,
+                  });
+                  setRequirements(nextReqs);
+                }}
               >
                 <View style={[styles.checkCircle, m.isCompleted && { backgroundColor: '#16A34A', borderColor: '#16A34A' }]}>
                   {m.isCompleted && <Icon name="checkmark" size={12} color="#FFFFFF" />}
@@ -287,6 +467,18 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                 >
                   {m.title}
                 </Text>
+                {/* Minus button — removes this milestone from the requirement */}
+                <TouchableOpacity
+                  style={[
+                    styles.removeMilestoneBtn,
+                    { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder },
+                  ]}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={() => handleRemoveMilestone(m)}
+                >
+                  <Text style={styles.removeMilestoneBtnText}>-</Text>
+                </TouchableOpacity>
               </TouchableOpacity>
             ))}
           </View>
@@ -386,6 +578,43 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
             <Icon name="chatbubble-ellipses" size={15} color="#FFFFFF" />
             <Text style={styles.publishBtnText}>Publish Broadcast to {targetReq.organization}</Text>
           </TouchableOpacity>
+
+          {/* Broadcast history — what this manager already published for the
+              selected target requirement, with author + time ago. */}
+          <Text style={[styles.fieldLabel, { color: palette.textPrimary, marginTop: 14 }]}>
+            Published Broadcasts ({targetReq.code})
+          </Text>
+          {(targetReq.broadcasts || []).length === 0 ? (
+            <Text style={[styles.broadcastHistoryEmpty, { color: palette.textSecondary }]}>
+              Nothing published yet. Every broadcast you send will be listed here with your name
+              and how long ago it was published.
+            </Text>
+          ) : (
+            (targetReq.broadcasts || []).map((b) => (
+              <View
+                key={b.id}
+                style={[
+                  styles.broadcastHistoryItem,
+                  { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder },
+                ]}
+              >
+                <View style={styles.broadcastHistoryHeader}>
+                  <Text
+                    style={[styles.broadcastHistoryAuthor, { color: palette.primary }]}
+                    numberOfLines={1}
+                  >
+                    {b.author || 'Engineering Management'}
+                  </Text>
+                  <Text style={[styles.broadcastHistoryTime, { color: palette.textSecondary }]}>
+                    {timeAgo(b.createdAt)}
+                  </Text>
+                </View>
+                <Text style={[styles.broadcastHistoryContent, { color: palette.textPrimary }]}>
+                  {b.content}
+                </Text>
+              </View>
+            ))
+          )}
         </View>
           </>
         ) : (
@@ -529,6 +758,20 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     color: '#94A3B8',
   },
+  removeMilestoneBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeMilestoneBtnText: {
+    fontSize: 16,
+    lineHeight: 17,
+    fontWeight: '900',
+    color: '#DC2626',
+  },
   addMilestoneRow: {
     flexDirection: 'row',
     gap: 8,
@@ -602,6 +845,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  broadcastHistoryEmpty: {
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+  broadcastHistoryItem: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 6,
+  },
+  broadcastHistoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
+  broadcastHistoryAuthor: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  broadcastHistoryTime: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  broadcastHistoryContent: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
   selectorCard: {
     marginBottom: 12,
   },
@@ -636,21 +910,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 6,
   },
-  orgChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 10,
-  },
-  orgChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  orgChipText: {
-    fontSize: 11,
-  },
   datePickerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -664,6 +923,49 @@ const styles = StyleSheet.create({
   datePickerBtnText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  clientSelectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    marginBottom: 6,
+  },
+  clientSelectText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  clientDropdown: {
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  clientOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  clientOptionName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  clientOptionEmail: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  clientDropdownNote: {
+    fontSize: 11,
+    lineHeight: 16,
+    padding: 12,
   },
   broadcastTargetChips: {
     flexDirection: 'row',

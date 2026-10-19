@@ -8,10 +8,9 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { updateTaskStatus } from '../../store/slices/tasksSlice';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { loadTasks, updateTaskStatus } from '../../services/taskService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
@@ -26,13 +25,26 @@ const TASK_STATES = ['TO_DO', 'IN_PROGRESS', 'COMPLETED'];
 const QUICK_PERCENTS = [25, 50, 75, 100];
 
 export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
-  const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
   const scrollViewRef = useRef(null);
 
-  const { tasks } = useSelector((state) => state.tasks);
+  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // refresh on focus, so a status change saved here (or by the manager in
+  // another screen) shows the latest data next time the employee looks.
+  const [tasks, setTasks] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setTasks(await loadTasks());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
+
   const [selectedTab, setSelectedTab] = useState('ALL');
 
   // Filter tasks to this employee (supports both assignedToId and multi-assignees assignedToIds)
@@ -81,24 +93,31 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
     setProgressPercent(String(next));
   };
 
-  const handleSaveProgress = (task) => {
+  const handleSaveProgress = async (task) => {
     const pct = parseInt(progressPercent, 10);
     const validPct = isNaN(pct) ? task.progressPercent || 0 : Math.min(100, Math.max(0, pct));
 
-    dispatch(
-      updateTaskStatus({
-        taskId: task.id,
-        status: taskState,
-        progressPercent: validPct,
-        note: progressNote.trim() || `Progress recorded at ${validPct}%`,
-      })
-    );
+    // Writes the new status/progress to AsyncStorage and refreshes local state
+    // with the saved list (taskService hands it straight back).
+    const nextTasks = await updateTaskStatus({
+      taskId: task.id,
+      status: taskState,
+      progressPercent: validPct,
+      note: progressNote.trim() || `Progress recorded at ${validPct}%`,
+    });
+    setTasks(nextTasks);
 
     Alert.alert(
       'Progress Saved',
       `Task ${task.code} updated to ${taskState.replace('_', ' ')} (${validPct}%). Manager notified.`
     );
   };
+
+  // Wait for the first AsyncStorage read so the list doesn't flash its empty
+  // state while real tasks are still loading.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>

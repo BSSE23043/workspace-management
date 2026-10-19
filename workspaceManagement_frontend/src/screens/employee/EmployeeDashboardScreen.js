@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
 import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { loadTasks } from '../../services/taskService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { formatCurrency } from '../../utils/salaryCalculator';
@@ -18,11 +19,30 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  const { tasks } = useSelector((state) => state.tasks);
   const { logs } = useSelector((state) => state.attendance);
+
+  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // refresh on focus so the "today's task" card always shows the latest state.
+  const [tasks, setTasks] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setTasks(await loadTasks());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
 
   const activeTask = tasks.find((t) => t.assignedToId === currentUser?.id || t.id === 'TSK-408') || tasks[0];
   const todayLog = logs.find((l) => l.userId === currentUser?.id || l.userId === 'EMP-089');
+
+  // Wait for the first AsyncStorage read so the task card doesn't flash while
+  // real data is still loading.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>

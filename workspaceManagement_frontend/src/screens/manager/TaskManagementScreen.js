@@ -8,11 +8,10 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { createTask } from '../../store/slices/tasksSlice';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { loadTasks, createTask } from '../../services/taskService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
@@ -28,12 +27,23 @@ const STATUS_TABS = [
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 export const TaskManagementScreen = ({ navigation }) => {
-  const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
-  const { tasks } = useSelector((state) => state.tasks);
+  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // refresh on every focus so a task created here (or elsewhere) shows up.
+  const [tasks, setTasks] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setTasks(await loadTasks());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
 
   // Users are loaded from AsyncStorage (Redux no longer stores the user list)
   const [users, setUsers] = useState([]);
@@ -85,7 +95,7 @@ export const TaskManagementScreen = ({ navigation }) => {
 
   const filteredTasks = tasks.filter((t) => activeTab === 'ALL' || t.status === activeTab);
 
-  const handleCreateTask = () => {
+  const handleCreateTask = async () => {
     if (!taskTitle.trim()) {
       setHasFormError(true);
       return;
@@ -104,18 +114,22 @@ export const TaskManagementScreen = ({ navigation }) => {
     const assignedUsers = engineers.filter((e) => assignedToIds.includes(e.id));
     const assignedNames = assignedUsers.map((e) => e.name);
 
-    dispatch(
-      createTask({
-        title: taskTitle.trim(),
-        assignedToIds,
-        assignedToNames,
-        assignedToId: assignedToIds[0],
-        assignedToName: assignedNames.join(', '),
-        priority,
-        internalDeadline,
-        clientDeadline,
-      })
-    );
+    // Write the new task to AsyncStorage and refresh local state with the
+    // saved list (taskService saves it and hands the list straight back).
+    const nextTasks = await createTask({
+      title: taskTitle.trim(),
+      assignedToIds,
+      // The real variable above is called assignedNames — passing a shorthand
+      // named assignedToNames here referenced an undeclared identifier and
+      // crashed with "Property assignedToNames doesn't exist" on button press.
+      assignedToNames: assignedNames,
+      assignedToId: assignedToIds[0],
+      assignedToName: assignedNames.join(', '),
+      priority,
+      internalDeadline,
+      clientDeadline,
+    });
+    setTasks(nextTasks);
 
     setTaskTitle('');
     setHasFormError(false);
@@ -124,6 +138,12 @@ export const TaskManagementScreen = ({ navigation }) => {
       `Task "${taskTitle}" assigned to ${assignedNames.join(', ')}.`
     );
   };
+
+  // Wait for the first AsyncStorage read so the board doesn't flash its
+  // empty state while real tasks are still loading.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>

@@ -9,11 +9,16 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { addTaskLog, updateTaskStatus, editTask, toggleMilestoneSync } from '../../store/slices/tasksSlice';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import {
+  loadTasks,
+  addTaskLog,
+  updateTaskStatus,
+  editTask,
+  toggleMilestoneSync,
+} from '../../services/taskService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
@@ -22,13 +27,26 @@ import DatePickerModal from '../../components/common/DatePickerModal';
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 export const TaskDetailScreen = ({ navigation, route }) => {
-  const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
   const taskId = route?.params?.taskId;
-  const { tasks } = useSelector((state) => state.tasks);
+
+  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // refresh on focus so edits made here always show the latest saved data.
+  const [tasks, setTasks] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setTasks(await loadTasks());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
+
   const task = tasks.find((t) => t.id === taskId) || tasks[0];
 
   // Users are loaded from AsyncStorage (Redux no longer stores the user list)
@@ -65,51 +83,49 @@ export const TaskDetailScreen = ({ navigation, route }) => {
   const diffDays = Math.round((cliDate.getTime() - intDate.getTime()) / (1000 * 60 * 60 * 24));
   const hasConflict = diffDays < 0;
 
-  const handlePostNote = () => {
+  const handlePostNote = async () => {
     if (!managerNote.trim()) return;
-    dispatch(
-      addTaskLog({
-        taskId: task.id,
-        note: `Manager Note: ${managerNote.trim()}`,
-      })
-    );
+    const nextTasks = await addTaskLog({
+      taskId: task.id,
+      note: `Manager Note: ${managerNote.trim()}`,
+    });
+    setTasks(nextTasks);
     setManagerNote('');
     Alert.alert('Note Posted', 'Manager progress note attached to task timeline.');
   };
 
-  const handleToggleSyncMilestone = () => {
+  const handleToggleSyncMilestone = async () => {
     const nextState = !task?.isMilestoneSynced;
-    dispatch(toggleMilestoneSync({ taskId: task.id, isSynced: nextState }));
+    // Both writes are sequential on purpose: each service call re-reads the
+    // saved list, so the second one must run after the first one has finished.
+    let nextTasks = await toggleMilestoneSync({ taskId: task.id, isSynced: nextState });
     if (nextState) {
-      dispatch(
-        updateTaskStatus({
-          taskId: task.id,
-          status: 'COMPLETED',
-          progressPercent: 100,
-          note: 'Task marked ready for Client Milestone Sync by Engineering Manager.',
-        })
-      );
+      nextTasks = await updateTaskStatus({
+        taskId: task.id,
+        status: 'COMPLETED',
+        progressPercent: 100,
+        note: 'Task marked ready for Client Milestone Sync by Engineering Manager.',
+      });
       Alert.alert(
         'Milestone Synced',
         `Task ${task.code} marked ready and synchronized with Client Deliverables.`
       );
     } else {
-      dispatch(
-        updateTaskStatus({
-          taskId: task.id,
-          status: 'IN_PROGRESS',
-          progressPercent: 75,
-          note: 'Client Milestone Sync reverted by Engineering Manager.',
-        })
-      );
+      nextTasks = await updateTaskStatus({
+        taskId: task.id,
+        status: 'IN_PROGRESS',
+        progressPercent: 75,
+        note: 'Client Milestone Sync reverted by Engineering Manager.',
+      });
       Alert.alert(
         'Milestone Sync Reverted',
         `Task ${task.code} sync status has been un-marked and returned to In Progress.`
       );
     }
+    setTasks(nextTasks);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editTitle.trim()) {
       Alert.alert('Validation Error', 'Task title cannot be empty.');
       return;
@@ -117,21 +133,45 @@ export const TaskDetailScreen = ({ navigation, route }) => {
     const selectedEngs = engineers.filter((e) => editAssignedIds.includes(e.id));
     const names = selectedEngs.map((e) => e.name);
 
-    dispatch(
-      editTask({
-        taskId: task.id,
-        title: editTitle.trim(),
-        description: editDesc.trim(),
-        priority: editPriority,
-        internalDeadline: editInternalDeadline,
-        clientDeadline: editClientDeadline,
-        assignedToIds: editAssignedIds,
-        assignedToNames: names,
-      })
-    );
+    const nextTasks = await editTask({
+      taskId: task.id,
+      title: editTitle.trim(),
+      description: editDesc.trim(),
+      priority: editPriority,
+      internalDeadline: editInternalDeadline,
+      clientDeadline: editClientDeadline,
+      assignedToIds: editAssignedIds,
+      assignedToNames: names,
+    });
+    setTasks(nextTasks);
     setIsEditModalVisible(false);
     Alert.alert('Task Updated', `Task ${task.code} details saved successfully.`);
   };
+
+  // Wait for the first AsyncStorage read before rendering anything.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
+
+  // Tasks list can be empty now (fresh install, nothing created yet) — show a
+  // friendly message instead of crashing on a missing task.
+  if (!task) {
+    return (
+      <View style={[styles.container, { backgroundColor: palette.background }]}>
+        <HeaderBar
+          title="Task Detail"
+          subtitle="Task Detail & Audit"
+          showBack
+          navigation={navigation}
+        />
+        <View style={styles.notFoundBox}>
+          <Text style={{ color: palette.textSecondary, textAlign: 'center' }}>
+            This task no longer exists or has not been assigned yet.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
@@ -460,6 +500,12 @@ export const TaskDetailScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  notFoundBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
   scrollContent: {
     padding: 16,

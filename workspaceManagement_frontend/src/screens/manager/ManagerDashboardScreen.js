@@ -10,6 +10,8 @@ import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { loadTasks } from '../../services/taskService';
+import { loadRequirements } from '../../services/requirementService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
@@ -18,10 +20,27 @@ export const ManagerDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
-  const { tasks } = useSelector((state) => state.tasks);
   const { leaves } = useSelector((state) => state.leaves);
-  const { requirements } = useSelector((state) => state.requirements);
   const { logs } = useSelector((state) => state.attendance);
+
+  // Tasks & requirements are NOT in Redux anymore — they are read from
+  // AsyncStorage when this screen mounts, and again every time it regains
+  // focus (tab screens stay mounted, so focus is what keeps data fresh).
+  const [tasks, setTasks] = useState([]);
+  const [requirements, setRequirements] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const loadData = async () => {
+      const storedTasks = await loadTasks();
+      const storedRequirements = await loadRequirements();
+      setTasks(storedTasks);
+      setRequirements(storedRequirements);
+      setIsDataLoaded(true);
+    };
+    loadData();
+    const unsubscribe = navigation.addListener('focus', loadData);
+    return () => unsubscribe();
+  }, [navigation]);
 
   // The manager's team = employee users whose reporting line points to this
   // manager (managerId). Users live in AsyncStorage (single source of truth).
@@ -70,14 +89,19 @@ export const ManagerDashboardScreen = ({ navigation }) => {
     ).length;
   }, [logs, teamIds, todayStr]);
 
+  // Wait for the first AsyncStorage read so the KPIs don't flash "0" while
+  // the real numbers are still loading.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
       <HeaderBar
         title="Manager Operational Dashboard"
         subtitle="Engineering Management"
         navigation={navigation}
-        statusText="TEAM ONLINE"
-        statusColor="#1D4ED8"
+        showStatus={false}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -159,19 +183,9 @@ export const ManagerDashboardScreen = ({ navigation }) => {
             <Icon name="chevron-forward" size={16} color="#94A3B8" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.controlRow, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
-            onPress={() => navigation.navigate('Team & Leave')}
-          >
-            <View style={[styles.controlIconBox, { backgroundColor: '#FEF3C7' }]}>
-              <Icon name="calendar" size={18} color="#D97706" />
-            </View>
-            <View style={styles.controlInfo}>
-              <Text style={[styles.controlTitle, { color: palette.textPrimary }]}>Leave Review & Approvals</Text>
-              <Text style={[styles.controlSub, { color: palette.textSecondary }]}>Overlap verification & comment enforcement</Text>
-            </View>
-            <Icon name="chevron-forward" size={16} color="#94A3B8" />
-          </TouchableOpacity>
+          {/* "Leave Review & Approvals" row removed from the dashboard —
+              the Team & Leave screen itself is still reachable from the
+              Team Attendance row and the manager drawer. */}
 
           <TouchableOpacity
             style={[styles.controlRow, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}

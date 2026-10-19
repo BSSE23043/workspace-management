@@ -4,8 +4,9 @@ import attendanceReducer from './slices/attendanceSlice';
 import salaryReducer from './slices/salarySlice';
 import leavesReducer from './slices/leavesSlice';
 import ticketsReducer from './slices/ticketsSlice';
-import tasksReducer from './slices/tasksSlice';
-import requirementsReducer from './slices/requirementsSlice';
+// NOTE: tasks & requirements were removed from Redux on purpose — they are
+// loaded from AsyncStorage on demand by services/taskService.js and
+// services/requirementService.js instead (see those files for the details).
 
 export const store = configureStore({
   reducer: {
@@ -14,8 +15,6 @@ export const store = configureStore({
     salary: salaryReducer,
     leaves: leavesReducer,
     tickets: ticketsReducer,
-    tasks: tasksReducer,
-    requirements: requirementsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
