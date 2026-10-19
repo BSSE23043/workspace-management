@@ -50,6 +50,7 @@ export const createTask = async (payload) => {
     assignedToName,
     assignedToIds = [],
     assignedToNames = [],
+    createdByName,
     requirementId,
     priority = 'MEDIUM',
     internalDeadline,
@@ -71,11 +72,12 @@ export const createTask = async (payload) => {
     id: `TSK-${Math.floor(400 + Math.random() * 500)}`,
     code: `#TSK-${Math.floor(400 + Math.random() * 500)}`,
     title,
-    description: description || 'Task assigned by Engineering Manager',
+    description: description || `Task assigned by ${createdByName || 'your Manager'}`,
     assignedToId: primaryId,
     assignedToName: primaryName,
     assignedToIds: assignedToIds.length > 0 ? assignedToIds : [primaryId],
     assignedToNames: assignedToNames.length > 0 ? assignedToNames : [primaryName],
+    createdByName: createdByName || null,
     requirementId,
     priority,
     internalDeadline,
@@ -91,7 +93,11 @@ export const createTask = async (payload) => {
     logs: [
       {
         time: 'Just now',
-        note: `Task created and assigned to ${primaryName} by Engineering Manager.`,
+        // Real timestamp so the employee's message list can show a "time ago"
+        // label, exactly like the requirement broadcasts do.
+        createdAt: Date.now(),
+        author: createdByName || null,
+        note: `Task created and assigned to ${primaryName} by ${createdByName || 'Management'}.`,
       },
     ],
   };
@@ -111,6 +117,7 @@ export const editTask = async (payload) => {
     clientDeadline,
     assignedToIds,
     assignedToNames,
+    author,
   } = payload;
 
   const tasks = await loadTasks();
@@ -135,6 +142,8 @@ export const editTask = async (payload) => {
 
     task.logs.unshift({
       time: 'Just now',
+      createdAt: Date.now(),
+      author: author || 'Manager',
       note: `Manager edited task parameters and deadlines.`,
     });
   }
@@ -144,7 +153,7 @@ export const editTask = async (payload) => {
 
 // Manager marks / unmarks a task as ready for client milestone sync.
 export const toggleMilestoneSync = async (payload) => {
-  const { taskId, isSynced } = payload;
+  const { taskId, isSynced, author } = payload;
   const tasks = await loadTasks();
   const task = tasks.find((t) => t.id === taskId);
 
@@ -152,6 +161,8 @@ export const toggleMilestoneSync = async (payload) => {
     task.isMilestoneSynced = isSynced;
     task.logs.unshift({
       time: 'Just now',
+      createdAt: Date.now(),
+      author: author || 'Manager',
       note: isSynced
         ? 'Marked as Ready for Client Milestone Sync'
         : 'Reverted Client Milestone Sync status',
@@ -164,7 +175,7 @@ export const toggleMilestoneSync = async (payload) => {
 // Status / progress change — used by the manager AND by the employee's own
 // "save progress" action.
 export const updateTaskStatus = async (payload) => {
-  const { taskId, status, progressPercent, note } = payload;
+  const { taskId, status, progressPercent, note, author } = payload;
   const tasks = await loadTasks();
   const task = tasks.find((t) => t.id === taskId);
 
@@ -174,6 +185,8 @@ export const updateTaskStatus = async (payload) => {
     if (note) {
       task.logs.unshift({
         time: 'Just now',
+        createdAt: Date.now(),
+        author: author || null,
         note,
       });
     }
@@ -182,15 +195,18 @@ export const updateTaskStatus = async (payload) => {
   return saveTasks(tasks);
 };
 
-// Manager posts a note on the task timeline.
+// Posts a message on the task timeline — used by the manager (his notes) and
+// by the employee (his replies), the same way requirement broadcasts work.
 export const addTaskLog = async (payload) => {
-  const { taskId, note } = payload;
+  const { taskId, note, author } = payload;
   const tasks = await loadTasks();
   const task = tasks.find((t) => t.id === taskId);
 
   if (task && note) {
     task.logs.unshift({
       time: 'Just now',
+      createdAt: Date.now(),
+      author: author || null,
       note,
     });
   }

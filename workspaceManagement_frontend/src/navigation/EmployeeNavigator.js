@@ -10,7 +10,6 @@ import AttendanceActionScreen from '../screens/employee/AttendanceActionScreen';
 import MySalaryEstimateScreen from '../screens/employee/MySalaryEstimateScreen';
 import WorkAndRequestsHubScreen from '../screens/employee/WorkAndRequestsHubScreen';
 import MyLeaveRequestsScreen from '../screens/employee/MyLeaveRequestsScreen';
-import MyHRTicketsScreen from '../screens/employee/MyHRTicketsScreen';
 import MyTasksScreen from '../screens/employee/MyTasksScreen';
 import EmployeeProfileScreen from '../screens/employee/EmployeeProfileScreen';
 
@@ -58,7 +57,6 @@ export const EmployeeNavigator = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="EmployeeTabs" component={EmployeeTabs} />
       <Stack.Screen name="MyLeaveRequests" component={MyLeaveRequestsScreen} />
-      <Stack.Screen name="MyHRTickets" component={MyHRTicketsScreen} />
       <Stack.Screen name="MyTasks" component={MyTasksScreen} />
       <Stack.Screen name="EmployeeProfile" component={EmployeeProfileScreen} />
     </Stack.Navigator>

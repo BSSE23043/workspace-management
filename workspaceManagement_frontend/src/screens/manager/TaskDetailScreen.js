@@ -88,6 +88,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
     const nextTasks = await addTaskLog({
       taskId: task.id,
       note: `Manager Note: ${managerNote.trim()}`,
+      author: currentUser?.name,
     });
     setTasks(nextTasks);
     setManagerNote('');
@@ -98,13 +99,18 @@ export const TaskDetailScreen = ({ navigation, route }) => {
     const nextState = !task?.isMilestoneSynced;
     // Both writes are sequential on purpose: each service call re-reads the
     // saved list, so the second one must run after the first one has finished.
-    let nextTasks = await toggleMilestoneSync({ taskId: task.id, isSynced: nextState });
+    let nextTasks = await toggleMilestoneSync({
+      taskId: task.id,
+      isSynced: nextState,
+      author: currentUser?.name,
+    });
     if (nextState) {
       nextTasks = await updateTaskStatus({
         taskId: task.id,
         status: 'COMPLETED',
         progressPercent: 100,
         note: 'Task marked ready for Client Milestone Sync by Engineering Manager.',
+        author: currentUser?.name,
       });
       Alert.alert(
         'Milestone Synced',
@@ -116,6 +122,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
         status: 'IN_PROGRESS',
         progressPercent: 75,
         note: 'Client Milestone Sync reverted by Engineering Manager.',
+        author: currentUser?.name,
       });
       Alert.alert(
         'Milestone Sync Reverted',
@@ -142,6 +149,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
       clientDeadline: editClientDeadline,
       assignedToIds: editAssignedIds,
       assignedToNames: names,
+      author: currentUser?.name,
     });
     setTasks(nextTasks);
     setIsEditModalVisible(false);
