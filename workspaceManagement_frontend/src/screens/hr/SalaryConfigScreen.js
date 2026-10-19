@@ -34,7 +34,6 @@ const salaryReducer = (state, action) => {
         expectedWorkingDays: String(days),
         dailyProRata: days > 0 ? Math.round(base / days) : 0,
         deductionPerAbsentDay: String(action.payload.deductionPerAbsentDay || 5000),
-        deductionPerUnpaidLeaveDay: String(action.payload.deductionPerUnpaidLeaveDay || 3500),
       };
     }
     default:
@@ -47,7 +46,6 @@ const initialSalaryState = {
   expectedWorkingDays: '22',
   dailyProRata: 6818,
   deductionPerAbsentDay: '5000',
-  deductionPerUnpaidLeaveDay: '3500',
 };
 
 export const SalaryConfigScreen = ({ navigation }) => {
@@ -82,8 +80,7 @@ export const SalaryConfigScreen = ({ navigation }) => {
   const isValid =
     isValidNumber(state.baseSalary) &&
     isValidNumber(state.expectedWorkingDays) &&
-    isValidNumber(state.deductionPerAbsentDay) &&
-    isValidNumber(state.deductionPerUnpaidLeaveDay);
+    isValidNumber(state.deductionPerAbsentDay);
 
   const handleSelectEmployee = (emp) => {
     setSelectedEmployeeId(emp.id);
@@ -117,7 +114,6 @@ export const SalaryConfigScreen = ({ navigation }) => {
       baseSalary: parseInt(state.baseSalary, 10),
       workingDaysPerPeriod: parseInt(state.expectedWorkingDays, 10),
       deductionPerAbsentDay: parseInt(state.deductionPerAbsentDay, 10),
-      deductionPerUnpaidLeaveDay: parseInt(state.deductionPerUnpaidLeaveDay, 10),
     };
 
     if (activeScope === 'COMPANY') {
@@ -263,16 +259,6 @@ export const SalaryConfigScreen = ({ navigation }) => {
             }
             keyboardType="numeric"
             placeholder="5000"
-          />
-
-          <AppInput
-            label="Deduction per Unpaid Leave Day (PKR / Day)"
-            value={state.deductionPerUnpaidLeaveDay}
-            onChangeText={(v) =>
-              dispatch({ type: 'SET_FIELD', field: 'deductionPerUnpaidLeaveDay', value: v })
-            }
-            keyboardType="numeric"
-            placeholder="3500"
           />
         </View>
 

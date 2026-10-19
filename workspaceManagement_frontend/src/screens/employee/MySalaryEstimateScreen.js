@@ -22,7 +22,6 @@ const MONTH_CYCLES = [
     isCurrent: true,
     presentDays: 19,
     paidLeaveDays: 1,
-    unpaidLeaveDays: 1,
     absentDays: 1,
     statusText: 'Audited by HR • Projected Bank Transfer on Oct 31, 2026',
   },
@@ -33,7 +32,6 @@ const MONTH_CYCLES = [
     isCurrent: false,
     presentDays: 22,
     paidLeaveDays: 0,
-    unpaidLeaveDays: 0,
     absentDays: 0,
     statusText: 'Disbursed Sep 30, 2026 • Habib Bank Ref: HBL-982103',
   },
@@ -44,7 +42,6 @@ const MONTH_CYCLES = [
     isCurrent: false,
     presentDays: 21,
     paidLeaveDays: 1,
-    unpaidLeaveDays: 0,
     absentDays: 0,
     statusText: 'Disbursed Aug 31, 2026 • Habib Bank Ref: HBL-881290',
   },
@@ -55,7 +52,6 @@ const MONTH_CYCLES = [
     isCurrent: false,
     presentDays: 20,
     paidLeaveDays: 1,
-    unpaidLeaveDays: 1,
     absentDays: 0,
     statusText: 'Disbursed Jul 31, 2026 • Habib Bank Ref: HBL-771802',
   },
@@ -75,10 +71,8 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
       workingDaysPerPeriod: 22,
       presentDays: activeCycle.presentDays,
       paidLeaveDays: activeCycle.paidLeaveDays,
-      unpaidLeaveDays: activeCycle.unpaidLeaveDays,
       absentDays: activeCycle.absentDays,
       deductionPerAbsentDay: 5000,
-      deductionPerUnpaidLeaveDay: 3500,
     });
   }, [activeCycle]);
 
@@ -167,18 +161,13 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
             <Text style={[styles.telVal, { color: '#2563EB' }]}>{estimate.paidLeaveDays}</Text>
             <Text style={[styles.telLabel, { color: palette.textSecondary }]}>Paid Leave Day</Text>
           </View>
-
-          <View style={[styles.telemetryCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.telVal, { color: '#D97706' }]}>{estimate.unpaidLeaveDays}</Text>
-            <Text style={[styles.telLabel, { color: palette.textSecondary }]}>Unpaid Leave Day</Text>
-          </View>
         </View>
 
-        {/* Unexcused Absence Notice */}
+        {/* Absence Notice */}
         <View style={styles.absenceAlert}>
           <Icon name="alert-triangle" size={16} color="#DC2626" />
           <Text style={styles.absenceAlertText}>
-            Unexcused Absent: {estimate.unexcusedAbsentDays} Day (-{formatCurrency(estimate.absentDeductionTotal)}) • Out of Bounds GPS
+            Absent: {estimate.unexcusedAbsentDays} Day (-{formatCurrency(estimate.absentDeductionTotal)}) • No Check-In
           </Text>
         </View>
 
@@ -195,19 +184,10 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
 
           <View style={styles.itemRow}>
             <Text style={[styles.itemLabel, { color: palette.textSecondary }]}>
-              Unexcused Absence (1 Day @ 5,000 PKR / d):
+              Absent ({estimate.unexcusedAbsentDays} Day @ {formatCurrency(estimate.rateAbsent)} / d):
             </Text>
             <Text style={[styles.itemVal, { color: '#DC2626' }]}>
               -{formatCurrency(estimate.absentDeductionTotal)}
-            </Text>
-          </View>
-
-          <View style={styles.itemRow}>
-            <Text style={[styles.itemLabel, { color: palette.textSecondary }]}>
-              Unpaid Leave (1 Day @ 3,500 PKR / d):
-            </Text>
-            <Text style={[styles.itemVal, { color: '#DC2626' }]}>
-              -{formatCurrency(estimate.unpaidLeaveDeductionTotal)}
             </Text>
           </View>
         </View>

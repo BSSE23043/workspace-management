@@ -435,6 +435,71 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
     state). Also corrected the screen's `todayRecord` lookup to include today's date
     (`l.userId === id && l.date === todayStr` — previously matched the user's OLDEST log of any
     date, so a yesterday's-PRESENT log left the button stuck on "Check Out" next day).
+  - **Absent employees now flow into HR visibility + payroll deductions (feature gap, not just a
+    display bug).** Previously only punches were stored — a no-show was invisible everywhere, and
+    both payroll screens hardcoded `absentDays: 0` so the calculator never deducted. New pure util
+    `src/utils/attendanceStats.js` (`PUNCH_DUTY_ROLES = EMPLOYEE/MANAGER/HR`; ADMIN/CLIENT excluded,
+    inactive users excluded; `isWeekday`; `elapsedWorkdaysInMonth` = Mon-Fri days of the current
+    month up to today; `getUnexcusedAbsentDays = max(0, elapsed − present − paidLeave −
+    unpaidLeave)`; `isOnApprovedLeave`) — derivation only, no stored ABSENT rows. Applied in four
+    places: (1) `CompanyAttendanceScreen` — loads the AsyncStorage user roster and synthesizes rows
+    for punch-duty users with no log on the selected date (weekdays only, dates ≤ today): `ABSENT`
+    (red, "No Punch Recorded") or `ON_LEAVE` (amber, approved-leave covers the date); status-pill
+    counts and sections pick them up automatically. (2) `HRDashboardScreen` — "Unexcused" KPI now =
+    expected punch-duty headcount today minus checked-in minus on-leave (was: count of stored
+    ABSENT logs, which was always 0). (3) `SalaryEstimatesScreen` — `absentDays` computed per
+    employee from elapsed workdays vs own present/approved-leave days (was hardcoded 0); featured
+    audit + queue payouts + company total all reflect real absence deductions. (4)
+    `EmployeeDashboardScreen` — own salary estimate uses the same derivation plus the user's own
+    approved leave days from Redux (was 0/0/0). Calculator itself untouched (`S_net = S_base −
+    D_total`); `MySalaryEstimateScreen` month-cycle demos remain out of scope.
+  - **HR no longer sees themself in staff views.** The logged-in HR user (`useAuth().currentUser.id`)
+    is excluded everywhere HR-facing reads staff data: `CompanyAttendanceScreen` (own punches AND
+    synthesized ABSENT/ON_LEAVE rows filtered out — staff only), `HRDashboardScreen` (Checked-In /
+    Unexcused / Approved Leave KPIs all skip own userId), `SalaryEstimatesScreen` (own user removed
+    from `teamMembers`, so own payroll never appears in featured audit, queue, or company total).
+    Other HR/manager users' rows still visible — only "self" is hidden.
+  - **Payroll card simplification + "Unexcused" → "Absents" wording.** HR Featured Audit card in
+    `SalaryEstimatesScreen`: 4-block telemetry (Present/Paid/Unpaid/Absent) → 3 blocks
+    (Present / Leave / Absents, paid+unpaid merged under Leave); itemized "(Xd absent + Yd unpaid)"
+    deduction line → single "Total Deductions"; net payout box now centered on `palette.primary`
+    with white 22px value. HR dashboard KPI label "Unexcused" → "Absents". Employee payslip
+    (`MySalaryEstimateScreen`): "Unexcused Absent … Out of Bounds GPS" → "Absent … No Check-In";
+    both itemized deduction labels now use real counts/rates from the estimate instead of hardcoded
+    "1 Day @ 5,000 / 3,500 PKR". Unpaid-leave still deducted in the math (only display simplified).
+  - **Unpaid-leave category removed app-wide — leave is always paid; anything else is absence.**
+    `salaryCalculator.js`: dropped `unpaidLeaveDays`/`deductionPerUnpaidLeaveDay` params +
+    `L_unpaid`/`R_unpaid`/`unpaidLeaveDeductionTotal`/`rateUnpaidLeave` — now `A = max(0, W − P −
+    L_paid)`, `D_total = A × R_absent`, `S_net = S_base − D_total`. `attendanceStats.js`
+    `getUnexcusedAbsentDays` no longer takes unpaid days. `seedData.js` companyWide dropped
+    `deductionPerUnpaidLeaveDay`. `SalaryConfigScreen` (reducer/initial/validation/payload + the
+    "Deduction per Unpaid Leave Day" input) and admin `CompanyProfileScreen`
+    ("Default Unpaid Leave Deduction" input + payload key) both simplified. `HRDashboardScreen`
+    policy card: "Unpaid Leave Rate" row removed. `SalaryEstimatesScreen` + `EmployeeDashboardScreen`:
+    all approved leave counts as paid leave (no `isPaid` split). `MyLeaveRequestsScreen`: leave
+    types now just Annual Leave / Sick Leave (the "Casual / Unpaid 3,500 PKR/day" option and the
+    `isPaid` payload field are gone). `MySalaryEstimateScreen`: unpaid telemetry card + itemized
+    unpaid row removed; MONTH_CYCLES entries no longer carry `unpaidLeaveDays`. Repo-wide grep:
+    zero `isPaid|unpaidLeaveDays|deductionPerUnpaidLeaveDay|Unpaid Leave` matches remain.
+  - **Absence counting now starts when tracking actually began (fixes "absent 1 day but 65,000
+    deducted").** The derivation counted every weekday of the month (Oct 1 → today = 13 through
+    Oct 19), so anyone with no/one punch showed ~13 absent days → 13 × 5,000 = 65,000. New util
+    `attendanceTrackingStart(logs, today)` = date of the earliest attendance log ever (today if
+    none); `elapsedWorkdaysInMonth(monthPrefix, today, trackingStart)` counts Mon-Fri only from
+    that date. Applied in `SalaryEstimatesScreen`, `EmployeeDashboardScreen`, and
+    `CompanyAttendanceScreen` (synthesized ABSENT/ON_LEAVE rows only for dates ≥ tracking start —
+    pre-tracking dates are never marked absent). Verified: no logs → 1 elapsed day (absent once =
+    5,000); first log Oct 18 → only Oct 19 (a Monday) counts. HR dashboard today-only KPI unchanged
+    (tracking start is always ≤ today).
+  - **"Total Company Estimated Payroll" footer card removed** from HR `SalaryEstimatesScreen`
+    (ListFooterComponent + its `totalCompanyPayroll` sum + 6 footer styles deleted).
+  - **Employee ID tag (e.g. "EMP-012") removed** from the Featured Audit card in
+    `SalaryEstimatesScreen` (+ its `empIdTag` style) — IDs are internal only, never rendered on
+    salary cards (verified no other `.id` renders in the three salary screens).
+  - **Action features removed from Featured Audit card** — "Export PDF" and "Lock Approval"
+    buttons gone entirely from `SalaryEstimatesScreen` (card now ends at the ESTIMATED NET
+    PAYOUT box); dropped `cardActionsRow`/`lockBtn`/`lockBtnText`/`outlineBtn`/`outlineBtnText`
+    styles. Grep-verified zero matches for both labels.
 - **2026-10-19** — **Manager demo data removed; every manager screen now shows only the real team.**
   - `seedData.js`: `SEED_ATTENDANCE`, `SEED_LEAVES`, `SEED_TASKS`, `SEED_REQUIREMENTS` emptied to `[]`
     (the four were only read by the Redux slices' initial state; `storageService` first-run seed now

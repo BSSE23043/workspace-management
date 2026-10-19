@@ -55,7 +55,7 @@ export const SEED_SALARY_CONFIG = {
   companyWide: {
     workingDaysPerPeriod: 22,
     deductionPerAbsentDay: 5000,
-    deductionPerUnpaidLeaveDay: 3500,
+
     baseSalaryDefault: 150000,
   },
   overrides: {},

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,35 +7,69 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useSelector } from 'react-redux';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { PUNCH_DUTY_ROLES, isWeekday } from '../../utils/attendanceStats';
 
 export const HRDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
+  const { currentUser } = useAuth();
 
   const { tickets } = useSelector((state) => state.tickets);
   const { logs } = useSelector((state) => state.attendance);
   const { leaves } = useSelector((state) => state.leaves);
   const salaryConfig = useSelector((state) => state.salary.companyWide);
 
+  // User roster for today's expected headcount (absence derivation)
+  const [users, setUsers] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+      setUsers(storedUsers);
+    })();
+  }, []);
+
   const todayStr = new Date().toISOString().split('T')[0];
   const monthLabel = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
-  const todaysLogs = logs.filter((l) => l.date === todayStr);
-  const checkedInCount = todaysLogs.filter(
-    (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
-  ).length;
-  const unexcusedCount = todaysLogs.filter((l) => l.status === 'ABSENT').length;
+  // Staff-only KPIs — the logged-in HR's own punches/leaves are never counted
+  const todaysLogs = logs.filter((l) => l.date === todayStr && l.userId !== currentUser?.id);
+  const presentUserIds = new Set(
+    todaysLogs
+      .filter((l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT')
+      .map((l) => l.userId)
+  );
+  const checkedInCount = presentUserIds.size;
   const approvedLeaveCount = leaves.filter(
     (l) =>
+      l.userId !== currentUser?.id &&
       l.status === 'APPROVED' &&
       l.startDate &&
       l.endDate &&
       l.startDate <= todayStr &&
       l.endDate >= todayStr
   ).length;
+  // Unexcused = on punch duty today, no check-in, not on approved leave
+  const unexcusedCount = isWeekday(todayStr)
+    ? users.filter(
+        (u) =>
+          u.isActive !== false &&
+          PUNCH_DUTY_ROLES.includes(u.role) &&
+          u.id !== currentUser?.id &&
+          !presentUserIds.has(u.id) &&
+          !leaves.some(
+            (l) =>
+              l.userId === u.id &&
+              l.status === 'APPROVED' &&
+              l.startDate <= todayStr &&
+              l.endDate >= todayStr
+          )
+      ).length
+    : 0;
   const openTickets = tickets.filter((t) => t.status === 'OPEN').length;
   const pendingOverrides = tickets.filter(
     (t) =>
@@ -79,7 +113,7 @@ export const HRDashboardScreen = ({ navigation }) => {
           </View>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
             <Text style={[styles.kpiValue, { color: '#DC2626' }]}>{pad(unexcusedCount)}</Text>
-            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Unexcused</Text>
+            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Absents</Text>
           </View>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
             <Text style={[styles.kpiValue, { color: '#2563EB' }]}>{pad(approvedLeaveCount)}</Text>
@@ -139,12 +173,6 @@ export const HRDashboardScreen = ({ navigation }) => {
             <Text style={[styles.policyLabel, { color: palette.textSecondary }]}>Absent Deduction:</Text>
             <Text style={[styles.policyVal, { color: palette.textPrimary }]}>
               {Number(salaryConfig.deductionPerAbsentDay).toLocaleString()} PKR / d
-            </Text>
-          </View>
-          <View style={styles.policyRow}>
-            <Text style={[styles.policyLabel, { color: palette.textSecondary }]}>Unpaid Leave Rate:</Text>
-            <Text style={[styles.policyVal, { color: palette.textPrimary }]}>
-              {Number(salaryConfig.deductionPerUnpaidLeaveDay).toLocaleString()} PKR / d
             </Text>
           </View>
 
