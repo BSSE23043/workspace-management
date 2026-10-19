@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import MyLeaveRequestsScreen from './MyLeaveRequestsScreen';
@@ -13,18 +12,10 @@ export const WorkAndRequestsHubScreen = ({ navigation, route }) => {
   const [activeSegment, setActiveSegment] = useState('LEAVES'); // 'LEAVES' | 'TICKETS' | 'TASKS'
 
   // When a caller passes ?initialTab=... (e.g. the Salary screen's
-  // "Open an HR Ticket" link → TICKETS), open that segment ONCE, then clear
+  // "Open an HR Ticket" link -> TICKETS), open that segment ONCE, then clear
   // the param so later plain opens of this tab keep remembering the user's
-  // last opened segment.
-  useFocusEffect(
-    useCallback(() => {
-      if (route?.params?.initialTab) {
-        setActiveSegment(route.params.initialTab.toUpperCase());
-        navigation.setParams({ initialTab: undefined });
-      }
-    }, [route?.params?.initialTab])
-  );
-
+  // last opened segment. (Allowed concept: plain useEffect - the param change
+  // re-renders the screen, so no focus hook is needed.)
   useEffect(() => {
     if (route?.params?.initialTab) {
       setActiveSegment(route.params.initialTab.toUpperCase());

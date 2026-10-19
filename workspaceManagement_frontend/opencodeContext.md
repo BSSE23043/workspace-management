@@ -334,6 +334,45 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
 
 ## Changelog (append every change/pull/merge on `Umar`)
 
+- **2026-10-19** — **Resolved the `merge_Umar-2_Manal` conflict-resolution artifacts and audited Manal's changes for compatibility.**
+  - Merge commit `e1bd7b2` (parents: `acbfa53` Umar-2, `ca2db91` origin/Manal) had a bad "Accept both
+    changes" in `src/screens/employee/EmployeeDashboardScreen.js`: duplicate `activeTask` declaration
+    (Babel parse error) and Manal's `calculateSalaryEstimate(...)` call with **no import** (would have
+    been a runtime crash).
+  - **Fix kept our Umar-2 versions** of `activeTask` (with the deliberately-left demo fallbacks
+    `|| 'TSK-408'`) and `todayLog` (`|| 'EMP-089'`); deleted Manal's duplicate line 44. Added
+    `calculateSalaryEstimate` to the `utils/salaryCalculator` import (line 15).
+  - **Kept Manal's real-data salary/attendance logic** on the employee dashboard: `salaryConfig`
+    selector (`state.salary` → `overrides`/`companyWide` — verified against `salarySlice.js`),
+    `monthPrefix`/`monthLabel`, `recentLogs` (real punch history replacing hardcoded "Oct 15" rows),
+    `myMonthLogs`, `presentDays`, `cfg`, `myEstimate` (real figure replacing hardcoded `161500`),
+    and HR Support tile → `MyHRTickets` (route verified in `EmployeeNavigator.js:61`, matches our
+    earlier "HR Support → HR Tickets" fix).
+  - **Full audit of the other 24 merge-touched files — all compatible with Umar-2 work:**
+    - `ticketsSlice.js` / `seedData.js`: `SEED_HR_TICKETS = []` and `SEED_SALARY_CONFIG.overrides = {}`
+      (Manal removed HR demo seeds; matches our demo-removal direction; `storageService` still imports
+      the now-empty arrays fine).
+    - `salaryCalculator.js`: allowances term removed (`netSalary = S_base - D_total`); repo-wide grep
+      confirms nothing reads `totalAllowances`/`allowanceItems` any more.
+    - `attendanceSlice.js`: `overrideAttendance` now stamps real device date/time instead of hardcoded
+      `'2026-10-12'`/`'09:02 AM'` defaults and fixes the bogus record lookup.
+    - `DatePickerModal.js`: today-reference now real device date instead of hardcoded Oct 18, 2026.
+    - `assets/images/index.js`: `evidenceSignoutSheet` key + `.jpg` deleted; `HRTicketDetailScreen`
+      guards with `Boolean(ticket?.evidenceImageKey) && IMAGES[ticket.evidenceImageKey]`, and no
+      runtime code sets that key anymore (old seeded tickets are gone).
+    - `MyTasksScreen`/`MyLeaveRequestsScreen`/`MyHRTicketsScreen`: Manal removed the `EMP-089`/
+      `TSK-408` fallbacks from those screens (harmless — `SEED_TASKS = []`, and `currentUser.id` is
+      always set post-login); our dashboard fallbacks kept as agreed.
+    - `WorkAndRequestsHubScreen`: Manal's `initialTab` param-clear improvement kept, but removed the
+      **`useFocusEffect`** block (not an allowed concept in `concepts to be used.txt`; the identical
+      `useEffect` on the same param already does the job) and the now-unused `useCallback` import.
+    - Every selector used in merge-touched screens (`state.attendance/salary/leaves/tickets`) exists in
+      the 5-slice store; `state.tasks`/`state.requirements` are **not referenced anywhere**; no screen
+      is missing imports for `calculateSalaryEstimate`/`formatCurrency`/`timeAgo`/`loadTasks`.
+    - `package-lock.json`: only a `"dev": true` flag added; `package.json` untouched. New doc
+      `opencodeContext - manal.md` added by the merge (kept).
+  - Full Babel walk: **TOTAL FILES 65, FAILURES 0.**
+
 - **2026-10-19** — **Removed the dead "Privacy Enforced Scope" card from the manager requirement screen.**
   - Note: this was not a requirement in the list — it was a static card. It only ever rendered
     `activeReq.privateLinkedTasks`, a field that is initialised to `[]` in `addRequirement` and **never

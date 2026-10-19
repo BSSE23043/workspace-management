@@ -12,7 +12,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { loadTasks } from '../../services/taskService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
-import { formatCurrency } from '../../utils/salaryCalculator';
+import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
 
 export const EmployeeDashboardScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
@@ -40,8 +40,6 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const todayLog = logs.find((l) => l.userId === currentUser?.id || l.userId === 'EMP-089');
   const monthPrefix = new Date().toISOString().slice(0, 7);
   const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-
-  const activeTask = tasks.find((t) => t.assignedToId === currentUser?.id) || tasks[0];
 
   const recentLogs = logs.filter((l) => l.userId === currentUser?.id).slice(0, 2);
 
