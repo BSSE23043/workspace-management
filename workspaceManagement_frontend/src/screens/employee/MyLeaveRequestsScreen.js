@@ -19,9 +19,8 @@ import DatePickerModal from '../../components/common/DatePickerModal';
 import { validateLeaveDates } from '../../utils/validation';
 
 const LEAVE_TYPES = [
-  { id: 'Annual Leave • Paid', label: 'Annual Leave — Paid', isPaid: true },
-  { id: 'Sick Leave • Paid', label: 'Sick Leave — Paid', isPaid: true },
-  { id: 'Casual / Unpaid 3,500 PKR/day', label: 'Casual / Unpaid 3,500 PKR/day', isPaid: false },
+  { id: 'Annual Leave', label: 'Annual Leave' },
+  { id: 'Sick Leave', label: 'Sick Leave' },
 ];
 
 export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
@@ -33,7 +32,7 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
   const { leaves } = useSelector((state) => state.leaves);
   const myLeaves = leaves.filter((l) => l.userId === currentUser?.id);
 
-  const [selectedType, setSelectedType] = useState('Annual Leave • Paid');
+  const [selectedType, setSelectedType] = useState('Annual Leave');
   const [startDate, setStartDate] = useState('2026-10-20');
   const [endDate, setEndDate] = useState('2026-10-21');
   const [calendarField, setCalendarField] = useState(null); // 'start' | 'end' | null
@@ -57,8 +56,6 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
     const end = new Date(endDate);
     const daysCount = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
 
-    const typeObj = LEAVE_TYPES.find((t) => t.id === selectedType);
-
     dispatch(
       applyLeave({
         userId: currentUser?.id || '',
@@ -67,7 +64,6 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
         startDate,
         endDate,
         daysCount,
-        isPaid: typeObj?.isPaid ?? true,
         reason: reason.trim(),
       })
     );

@@ -63,6 +63,16 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
     deductionPerAbsentDay: cfg.deductionPerAbsentDay,
     deductionPerUnpaidLeaveDay: cfg.deductionPerUnpaidLeaveDay,
   });
+  const estimate = useMemo(() => {
+    return calculateSalaryEstimate({
+      baseSalary: 150000,
+      workingDaysPerPeriod: 22,
+      presentDays: activeCycle.presentDays,
+      paidLeaveDays: activeCycle.paidLeaveDays,
+      absentDays: activeCycle.absentDays,
+      deductionPerAbsentDay: 5000,
+    });
+  }, [activeCycle]);
 
   const handleDownloadPDF = () => {
     Alert.alert(
@@ -118,11 +128,14 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
             <Text style={[styles.telVal, { color: '#2563EB' }]}>{estimate.paidLeaveDays}</Text>
             <Text style={[styles.telLabel, { color: palette.textSecondary }]}>Paid Leave Day</Text>
           </View>
+        </View>
 
-          <View style={[styles.telemetryCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.telVal, { color: '#D97706' }]}>{estimate.unpaidLeaveDays}</Text>
-            <Text style={[styles.telLabel, { color: palette.textSecondary }]}>Unpaid Leave Day</Text>
-          </View>
+        {/* Absence Notice */}
+        <View style={styles.absenceAlert}>
+          <Icon name="alert-triangle" size={16} color="#DC2626" />
+          <Text style={styles.absenceAlertText}>
+            Absent: {estimate.unexcusedAbsentDays} Day (-{formatCurrency(estimate.absentDeductionTotal)}) • No Check-In
+          </Text>
         </View>
 
         {/* Itemized Policy Deductions */}
@@ -152,6 +165,12 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
               No deductions applied so far this month.
             </Text>
           )}
+              Absent ({estimate.unexcusedAbsentDays} Day @ {formatCurrency(estimate.rateAbsent)} / d):
+            </Text>
+            <Text style={[styles.itemVal, { color: '#DC2626' }]}>
+              -{formatCurrency(estimate.absentDeductionTotal)}
+            </Text>
+          </View>
         </View>
 
         {/* HR Ticket Link */}

@@ -9,15 +9,18 @@ import {
   Alert,
 } from 'react-native';
 import { useSelector } from 'react-redux';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
+import { elapsedWorkdaysInMonth, getUnexcusedAbsentDays, attendanceTrackingStart } from '../../utils/attendanceStats';
 
 export const SalaryEstimatesScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
+  const { currentUser } = useAuth();
 
   // Users are loaded from AsyncStorage (Redux no longer stores the user list)
   const [users, setUsers] = useState([]);
@@ -37,10 +40,20 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
 
   const monthPrefix = new Date().toISOString().slice(0, 7);
   const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const todayStr = new Date().toISOString().split('T')[0];
+  // Working days since attendance tracking began (first-ever log date; today
+  // if nobody has ever punched) up to today — pre-tracking days are never
+  // counted as absences.
+  const trackingStart = attendanceTrackingStart(logs, todayStr);
+  const workdaysElapsed = elapsedWorkdaysInMonth(monthPrefix, todayStr, trackingStart);
 
+  // HR sees employees' payroll only — never their own
   const teamMembers = useMemo(
-    () => users.filter((u) => u.role === 'EMPLOYEE' || u.role === 'MANAGER' || u.role === 'HR'),
-    [users]
+    () =>
+      users
+        .filter((u) => u.role === 'EMPLOYEE' || u.role === 'MANAGER' || u.role === 'HR')
+        .filter((u) => u.id !== currentUser?.id),
+    [users, currentUser]
   );
 
   const selectedUser = users.find((u) => u.id === selectedUserId) || teamMembers[0];
@@ -62,32 +75,26 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
         l.status === 'APPROVED' &&
         (l.startDate || '').startsWith(monthPrefix)
     );
-    const paidLeaveDays = empLeaves
-      .filter((l) => l.isPaid !== false)
-      .reduce((acc, l) => acc + (l.daysCount || 1), 0);
-    const unpaidLeaveDays = empLeaves
-      .filter((l) => l.isPaid === false)
-      .reduce((acc, l) => acc + (l.daysCount || 1), 0);
+    // All approved leave is paid — no unpaid-leave category exists
+    const leaveDays = empLeaves.reduce((acc, l) => acc + (l.daysCount || 1), 0);
+    // No punch on an elapsed working day (and not on approved leave) = absent
+    const absentDays = getUnexcusedAbsentDays({
+      workdaysElapsed,
+      presentDays,
+      paidLeaveDays: leaveDays,
+    });
 
     return calculateSalaryEstimate({
       baseSalary: base,
       workingDaysPerPeriod: cfg.workingDaysPerPeriod,
       presentDays,
-      paidLeaveDays,
-      unpaidLeaveDays,
-      absentDays: 0,
+      paidLeaveDays: leaveDays,
+      absentDays,
       deductionPerAbsentDay: cfg.deductionPerAbsentDay,
-      deductionPerUnpaidLeaveDay: cfg.deductionPerUnpaidLeaveDay,
     });
   };
 
   const currentBreakdown = selectedUser ? getBreakdownForUser(selectedUser) : null;
-
-  // Total company estimated payroll = sum of every real team member's estimate
-  const totalCompanyPayroll = teamMembers.reduce(
-    (sum, emp) => sum + getBreakdownForUser(emp).netSalary,
-    0
-  );
 
   const handleRecalculateAll = () => {
     setIsCalculating(true);
@@ -135,9 +142,6 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
                 {`FEATURED AUDIT • ${monthLabel.toUpperCase()}`}
               </Text>
             </View>
-            <Text style={[styles.empIdTag, { color: palette.textSecondary }]}>
-              {selectedUser?.id}
-            </Text>
           </View>
 
           <Text style={[styles.featuredEmpName, { color: palette.textPrimary }]}>
@@ -159,70 +163,38 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
               <Text style={[styles.telemetryVal, { color: '#2563EB' }]}>
                 {currentBreakdown.paidLeaveDays}d
               </Text>
-              <Text style={styles.telemetrySub}>Paid Leave</Text>
-            </View>
-            <View style={styles.telemetryBlock}>
-              <Text style={[styles.telemetryVal, { color: '#D97706' }]}>
-                {currentBreakdown.unpaidLeaveDays}d
-              </Text>
-              <Text style={styles.telemetrySub}>Unpaid Lv</Text>
+              <Text style={styles.telemetrySub}>Leave</Text>
             </View>
             <View style={styles.telemetryBlock}>
               <Text style={[styles.telemetryVal, { color: '#DC2626' }]}>
                 {currentBreakdown.unexcusedAbsentDays}d
               </Text>
-              <Text style={styles.telemetrySub}>Absent</Text>
+              <Text style={styles.telemetrySub}>Absents</Text>
             </View>
           </View>
 
-          {/* Itemized Calculations */}
+          {/* Simple Payroll Summary */}
           <View style={styles.calcRowsWrap}>
             <View style={styles.calcRow}>
-              <Text style={[styles.calcLabel, { color: palette.textSecondary }]}>Base Monthly Salary:</Text>
+              <Text style={[styles.calcLabel, { color: palette.textSecondary }]}>Base Salary</Text>
               <Text style={[styles.calcValue, { color: palette.textPrimary }]}>
                 {formatCurrency(currentBreakdown.baseSalary)}
               </Text>
             </View>
 
             <View style={styles.calcRow}>
-              <Text style={[styles.calcLabel, { color: '#DC2626' }]}>
-                Itemized Deductions ({currentBreakdown.unexcusedAbsentDays}d absent + {currentBreakdown.unpaidLeaveDays}d unpaid):
-              </Text>
+              <Text style={[styles.calcLabel, { color: '#DC2626' }]}>Total Deductions</Text>
               <Text style={[styles.calcValue, { color: '#DC2626' }]}>
                 -{formatCurrency(currentBreakdown.totalDeductions)}
               </Text>
             </View>
 
-            <View style={[styles.netTotalBox, { backgroundColor: palette.badge }]}>
-              <Text style={[styles.netTotalLabel, { color: palette.text }]}>ESTIMATED NET PAYOUT:</Text>
-              <Text style={[styles.netTotalValue, { color: palette.text }]}>
+            <View style={[styles.netTotalBox, { backgroundColor: palette.primary }]}>
+              <Text style={styles.netTotalLabelWhite}>ESTIMATED NET PAYOUT</Text>
+              <Text style={styles.netTotalValueWhite}>
                 {formatCurrency(currentBreakdown.netSalary)}
               </Text>
             </View>
-          </View>
-
-          {/* Action Buttons */}
-          <View style={styles.cardActionsRow}>
-            <TouchableOpacity
-              style={[styles.outlineBtn, { borderColor: palette.primary }]}
-              onPress={() =>
-                Alert.alert(
-                  'Export PDF',
-                  `Official Payslip PDF exported for ${selectedUser?.name} (${monthLabel}).`
-                )
-              }
-            >
-              <Icon name="document-text" size={14} color={palette.primary} />
-              <Text style={[styles.outlineBtnText, { color: palette.primary }]}>Export PDF</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.lockBtn, { backgroundColor: palette.primary }]}
-              onPress={() => Alert.alert('Locked', `Salary estimate locked for approval.`)}
-            >
-              <Icon name="lock-closed" size={14} color="#FFFFFF" />
-              <Text style={styles.lockBtnText}>Lock Approval</Text>
-            </TouchableOpacity>
           </View>
         </View>
       ) : (
@@ -236,25 +208,6 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
       <Text style={[styles.queueHeading, { color: palette.textPrimary }]}>
         Team Queue (Tap to Audit Employee)
       </Text>
-    </View>
-  );
-
-  // Syllabus Requirement: Total Payroll as ListFooterComponent
-  const renderListFooter = () => (
-    <View style={[styles.totalPayrollFooter, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-      <View style={styles.footerRow}>
-        <View>
-          <Text style={[styles.footerTitle, { color: palette.textPrimary }]}>
-            Total Company Estimated Payroll
-          </Text>
-          <Text style={[styles.footerSubtitle, { color: palette.textSecondary }]}>
-            Cycle: {monthLabel} • {teamMembers.length} Headcount • Projected
-          </Text>
-        </View>
-        <Text style={[styles.footerAmount, { color: palette.primary }]}>
-          {formatCurrency(totalCompanyPayroll)}
-        </Text>
-      </View>
     </View>
   );
 
@@ -304,7 +257,6 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         ListHeaderComponent={renderListHeader}
-        ListFooterComponent={renderListFooter}
         contentContainerStyle={styles.listContent}
       />
     </View>
@@ -378,10 +330,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  empIdTag: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
   featuredEmpName: {
     fontSize: 18,
     fontWeight: '800',
@@ -429,52 +377,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   netTotalBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
     marginTop: 6,
+    gap: 3,
   },
-  netTotalLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  netTotalValue: {
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  cardActionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  outlineBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderRadius: 8,
-    paddingVertical: 9,
-    gap: 6,
-  },
-  outlineBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  lockBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    paddingVertical: 9,
-    gap: 6,
-  },
-  lockBtnText: {
+  netTotalLabelWhite: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+    opacity: 0.9,
+  },
+  netTotalValueWhite: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '900',
   },
   queueHeading: {
     fontSize: 14,
@@ -510,29 +429,6 @@ const styles = StyleSheet.create({
   queuePayout: {
     fontSize: 12,
     fontWeight: '700',
-  },
-  totalPayrollFooter: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-    marginTop: 12,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  footerTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  footerSubtitle: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  footerAmount: {
-    fontSize: 18,
-    fontWeight: '900',
   },
   itemMonthStatus: {
     fontSize: 10,

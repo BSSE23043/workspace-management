@@ -13,6 +13,7 @@ import { loadTasks } from '../../services/taskService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
+import { elapsedWorkdaysInMonth, getUnexcusedAbsentDays, attendanceTrackingStart } from '../../utils/attendanceStats';
 
 export const EmployeeDashboardScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
@@ -49,16 +50,36 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const presentDays = myMonthLogs.filter(
     (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
   ).length;
+  // Own approved leave days this month (all leave is paid)
+  const { leaves } = useSelector((state) => state.leaves);
+  const paidLeaveDays = leaves
+    .filter(
+      (l) =>
+        l.userId === currentUser?.id &&
+        l.status === 'APPROVED' &&
+        (l.startDate || '').startsWith(monthPrefix)
+    )
+    .reduce((acc, l) => acc + (l.daysCount || 1), 0);
+  // No punch on a tracked working day = absence (counting starts at the first
+  // ever attendance log — days before tracking began are not absences)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const absentDays = getUnexcusedAbsentDays({
+    workdaysElapsed: elapsedWorkdaysInMonth(
+      monthPrefix,
+      todayStr,
+      attendanceTrackingStart(logs, todayStr)
+    ),
+    presentDays,
+    paidLeaveDays,
+  });
   const cfg = salaryConfig.overrides[currentUser?.id] || salaryConfig.companyWide;
   const myEstimate = calculateSalaryEstimate({
     baseSalary: currentUser?.baseSalary || cfg.baseSalary || cfg.baseSalaryDefault || 0,
     workingDaysPerPeriod: cfg.workingDaysPerPeriod,
     presentDays,
-    paidLeaveDays: 0,
-    unpaidLeaveDays: 0,
-    absentDays: 0,
+    paidLeaveDays,
+    absentDays,
     deductionPerAbsentDay: cfg.deductionPerAbsentDay,
-    deductionPerUnpaidLeaveDay: cfg.deductionPerUnpaidLeaveDay,
   });
 
   // Wait for the first AsyncStorage read so the task card doesn't flash while
