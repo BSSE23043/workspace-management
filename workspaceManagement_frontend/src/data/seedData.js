@@ -44,7 +44,7 @@ export const SEED_ATTENDANCE = [];
 // HR DEMO SEEDS REMOVED.
 // HR tickets and per-employee salary overrides now start EMPTY and are built
 // up at runtime by real users:
-//   - employees submit HR tickets (ticketsSlice.createTicket)
+//   - employees submit HR tickets (services/ticketService.createTicket)
 //   - HR configures company-wide policy + per-employee overrides
 //     (salarySlice.updateCompanySalaryConfig / updateEmployeeSalaryOverride)
 // The companyWide salary block below is functional payroll POLICY defaults

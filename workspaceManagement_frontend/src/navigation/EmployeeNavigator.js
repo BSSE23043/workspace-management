@@ -11,6 +11,7 @@ import MySalaryEstimateScreen from '../screens/employee/MySalaryEstimateScreen';
 import WorkAndRequestsHubScreen from '../screens/employee/WorkAndRequestsHubScreen';
 import MyLeaveRequestsScreen from '../screens/employee/MyLeaveRequestsScreen';
 import MyTasksScreen from '../screens/employee/MyTasksScreen';
+import MyHRTicketDetailScreen from '../screens/employee/MyHRTicketDetailScreen';
 import EmployeeProfileScreen from '../screens/employee/EmployeeProfileScreen';
 
 const Tab = createBottomTabNavigator();
@@ -58,6 +59,7 @@ export const EmployeeNavigator = () => {
       <Stack.Screen name="EmployeeTabs" component={EmployeeTabs} />
       <Stack.Screen name="MyLeaveRequests" component={MyLeaveRequestsScreen} />
       <Stack.Screen name="MyTasks" component={MyTasksScreen} />
+      <Stack.Screen name="MyHRTicketDetail" component={MyHRTicketDetailScreen} />
       <Stack.Screen name="EmployeeProfile" component={EmployeeProfileScreen} />
     </Stack.Navigator>
   );
