@@ -20,6 +20,7 @@ import {
   reopenTicket,
 } from '../../store/slices/ticketsSlice';
 import { overrideAttendance } from '../../store/slices/attendanceSlice';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
@@ -27,16 +28,17 @@ import { IMAGES } from '../../assets/images';
 
 export const HRTicketDetailScreen = ({ navigation, route }) => {
   const dispatch = useDispatch();
+  const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
 
-  const ticketId = route?.params?.ticketId || 'TKT-101';
+  const ticketId = route?.params?.ticketId;
   const { tickets } = useSelector((state) => state.tickets);
-  const ticket = tickets.find((t) => t.id === ticketId) || tickets[0];
+  const ticket = tickets.find((t) => t.id === ticketId);
 
   const [replyText, setReplyText] = useState('');
 
-  const isOverrideType = ticket?.category === 'Attendance Correction' || ticket?.id === 'TKT-101';
+  const isOverrideType = ticket?.category === 'Attendance Correction';
 
   const handleCloseTicket = () => {
     Alert.alert(
@@ -99,11 +101,11 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
             // 2. Dispatch attendanceSlice override
             dispatch(
               overrideAttendance({
-                userId: ticket.userId || 'EMP-089',
+                userId: ticket.userId,
                 userName: ticket.userName,
-                date: ticket.date || '2026-10-12',
-                checkInTime: '09:02 AM',
-                checkOutTime: '05:15 PM',
+                date: ticket.date,
+                checkInTime: ticket.requestedIn || '09:00 AM',
+                checkOutTime: ticket.requestedOut || '05:00 PM',
                 note: `HR Corrected via #${ticket.id} (Physical sign-in override)`,
               })
             );
@@ -145,12 +147,31 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
     dispatch(
       addTicketMessage({
         ticketId: ticket.id,
-        sender: 'Sana Khan (HR Specialist)',
+        sender: `${currentUser?.name || 'HR'} (HR)`,
         message: replyText.trim(),
       })
     );
     setReplyText('');
   };
+
+  if (!ticket) {
+    return (
+      <View style={[styles.container, { backgroundColor: palette.background }]}>
+        <HeaderBar
+          title="HR Ticket"
+          subtitle="Human Resources"
+          showBack
+          navigation={navigation}
+        />
+        <View style={styles.emptyStateWrap}>
+          <Icon name="ticket" size={28} color="#94A3B8" />
+          <Text style={[styles.emptyStateText, { color: palette.textSecondary }]}>
+            Ticket not found. It may have been removed — go back to the ticket queue.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -159,7 +180,7 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
     >
       <HeaderBar
         title={`Ticket #${ticket?.id}`}
-        subtitle="Attendance Override"
+        subtitle={ticket?.category || 'HR Ticket'}
         showBack
         navigation={navigation}
       />
@@ -200,32 +221,38 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
             <View style={styles.comparisonGrid}>
               <View style={[styles.comparisonBox, styles.currentBox]}>
                 <Text style={styles.comparisonLabel}>Current System Log</Text>
-                <Text style={styles.comparisonValue}>Out Missing / 0.0h Deduct</Text>
-                <Text style={styles.comparisonSub}>Flagged as unexcused absence</Text>
+                <Text style={styles.comparisonValue}>{ticket?.currentSystemLog || '—'}</Text>
               </View>
 
               <View style={[styles.comparisonBox, styles.proposedBox]}>
                 <Text style={[styles.comparisonLabel, { color: '#0F766E' }]}>Proposed Adjustment</Text>
-                <Text style={[styles.comparisonValue, { color: '#0F766E' }]}>Out 05:15 PM / 8h 15m Full</Text>
-                <Text style={[styles.comparisonSub, { color: '#115E59' }]}>Verified physical sign-out sheet</Text>
+                <Text style={[styles.comparisonValue, { color: '#0F766E' }]}>
+                  {ticket?.proposedAdjustment || '—'}
+                </Text>
               </View>
             </View>
 
             {/* Attached Evidence Preview */}
-            <Text style={[styles.evidenceLabel, { color: palette.textPrimary }]}>
-              Attached Evidence (1 Document) — Security Desk Physical Sign-Out Sheet:
-            </Text>
-            <View style={styles.evidenceContainer}>
-              <Image
-                source={IMAGES.evidenceSignoutSheet}
-                style={styles.evidenceImage}
-                resizeMode="cover"
-              />
-              <View style={styles.evidenceOverlay}>
-                <Icon name="document-text" size={14} color="#FFFFFF" />
-                <Text style={styles.evidenceFilename}>IMG_7701.JPG • Security Physical Register</Text>
+            {Boolean(ticket?.evidenceName) && (
+              <View>
+                <Text style={[styles.evidenceLabel, { color: palette.textPrimary }]}>
+                  Attached Evidence — {ticket.evidenceName}
+                </Text>
+                {Boolean(ticket?.evidenceImageKey) && IMAGES[ticket.evidenceImageKey] ? (
+                  <View style={styles.evidenceContainer}>
+                    <Image
+                      source={IMAGES[ticket.evidenceImageKey]}
+                      style={styles.evidenceImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.evidenceOverlay}>
+                      <Icon name="document-text" size={14} color="#FFFFFF" />
+                      <Text style={styles.evidenceFilename}>{ticket.evidenceName}</Text>
+                    </View>
+                  </View>
+                ) : null}
               </View>
-            </View>
+            )}
 
             {/* Override Action Buttons */}
             {ticket?.status === 'OPEN' && (
@@ -358,6 +385,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  emptyStateWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 10,
+  },
+  emptyStateText: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
@@ -446,11 +485,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#DC2626',
-    marginTop: 2,
-  },
-  comparisonSub: {
-    fontSize: 11,
-    color: '#7F1D1D',
     marginTop: 2,
   },
   evidenceLabel: {

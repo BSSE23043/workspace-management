@@ -12,10 +12,15 @@ export const WorkAndRequestsHubScreen = ({ navigation, route }) => {
   const palette = getRolePalette('EMPLOYEE');
   const [activeSegment, setActiveSegment] = useState('LEAVES'); // 'LEAVES' | 'TICKETS' | 'TASKS'
 
+  // When a caller passes ?initialTab=... (e.g. the Salary screen's
+  // "Open an HR Ticket" link → TICKETS), open that segment ONCE, then clear
+  // the param so later plain opens of this tab keep remembering the user's
+  // last opened segment.
   useFocusEffect(
     useCallback(() => {
       if (route?.params?.initialTab) {
         setActiveSegment(route.params.initialTab.toUpperCase());
+        navigation.setParams({ initialTab: undefined });
       }
     }, [route?.params?.initialTab])
   );
@@ -23,6 +28,7 @@ export const WorkAndRequestsHubScreen = ({ navigation, route }) => {
   useEffect(() => {
     if (route?.params?.initialTab) {
       setActiveSegment(route.params.initialTab.toUpperCase());
+      navigation.setParams({ initialTab: undefined });
     }
   }, [route?.params?.initialTab]);
 

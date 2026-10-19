@@ -40,96 +40,28 @@ export const SEED_COMPANY = {
 // ---------------------------------------------------------------------------
 export const SEED_ATTENDANCE = [];
 
+// ---------------------------------------------------------------------------
+// HR DEMO SEEDS REMOVED.
+// HR tickets and per-employee salary overrides now start EMPTY and are built
+// up at runtime by real users:
+//   - employees submit HR tickets (ticketsSlice.createTicket)
+//   - HR configures company-wide policy + per-employee overrides
+//     (salarySlice.updateCompanySalaryConfig / updateEmployeeSalaryOverride)
+// The companyWide salary block below is functional payroll POLICY defaults
+// (rates only), not demo records. Fixed allowances were removed entirely —
+// they no longer exist in config and no longer count toward net pay.
+// ---------------------------------------------------------------------------
 export const SEED_SALARY_CONFIG = {
   companyWide: {
     workingDaysPerPeriod: 22,
     deductionPerAbsentDay: 5000,
     deductionPerUnpaidLeaveDay: 3500,
     baseSalaryDefault: 150000,
-    allowancesDefault: 20000,
-    allowanceItems: [
-      { id: 'alw_trans', name: 'Transport Allowance', amount: 15000 },
-      { id: 'alw_net', name: 'Internet & Utility Allowance', amount: 5000 },
-    ],
   },
-  overrides: {
-    'EMP-089': {
-      baseSalary: 150000,
-      workingDaysPerPeriod: 22,
-      deductionPerAbsentDay: 5000,
-      deductionPerUnpaidLeaveDay: 3500,
-      allowanceItems: [
-        { id: 'alw_trans', name: 'Transport Allowance', amount: 15000 },
-        { id: 'alw_net', name: 'Internet & Utility Allowance', amount: 5000 },
-      ],
-    },
-  },
+  overrides: {},
 };
 
-export const SEED_HR_TICKETS = [
-  {
-    id: 'TKT-101',
-    userId: 'EMP-089',
-    userName: 'Ali Raza',
-    category: 'Attendance Correction',
-    date: '2026-10-12',
-    subject: 'Forgot to check out on Oct 12',
-    explanation: 'Checked out at 05:15 PM at security desk after network disconnected. Attached physical sign-out log.',
-    evidenceName: 'IMG_7701.JPG',
-    evidenceType: 'image',
-    evidenceImageKey: 'evidenceSignoutSheet',
-    status: 'OPEN',
-    currentSystemLog: 'Out Missing / 0.0h Deduct',
-    proposedAdjustment: 'Out 05:15 PM / 8h 15m Full',
-    timeline: [
-      { sender: 'Ali Raza', time: 'Oct 12, 05:30 PM', message: 'Submitted attendance override request with sign-out register proof.' },
-    ],
-  },
-  {
-    id: 'TKT-102',
-    userId: 'EMP-072',
-    userName: 'Farhan Siddiqui',
-    category: 'Attendance Correction',
-    date: '2026-10-14',
-    subject: 'Geofence boundary false negative',
-    explanation: 'GPS drift reported distance 520m while sitting in 2nd Floor Server Room.',
-    evidenceName: 'wifi_bssid_log.txt',
-    status: 'IN_PROGRESS',
-    currentSystemLog: 'Out of Bounds (520m)',
-    proposedAdjustment: 'Verify via Office Wi-Fi Access Point',
-    timeline: [
-      { sender: 'Farhan Siddiqui', time: 'Oct 14, 09:30 AM', message: 'Requested BSSID cross-check.' },
-      { sender: 'Sana Khan (HR)', time: 'Oct 14, 11:15 AM', message: 'Reviewing Network Telemetry log with IT Ops.' },
-    ],
-  },
-  {
-    id: 'TKT-103',
-    userId: 'EMP-077',
-    userName: 'Tariq Mehmood',
-    category: 'Salary Issue',
-    date: '2026-10-10',
-    subject: 'Missing Internet Allowance reimbursement',
-    explanation: 'October cycle did not credit the agreed 5,000 PKR home broadband allowance.',
-    status: 'OPEN',
-    timeline: [
-      { sender: 'Tariq Mehmood', time: 'Oct 10, 02:00 PM', message: 'Bill receipt attached for review.' },
-    ],
-  },
-  {
-    id: 'TKT-104',
-    userId: 'EMP-081',
-    userName: 'Zainab Malik',
-    category: 'General Inquiry',
-    date: '2026-10-08',
-    subject: 'Annual leave quota discrepancy',
-    explanation: 'Discrepancy of 2 days between HR portal and company spreadsheet.',
-    status: 'RESOLVED',
-    timeline: [
-      { sender: 'Zainab Malik', time: 'Oct 08, 10:00 AM', message: 'Please verify remaining leave balance.' },
-      { sender: 'Sana Khan (HR)', time: 'Oct 08, 04:00 PM', message: 'Corrected in HR database. Current balance: 14 Days.' },
-    ],
-  },
-];
+export const SEED_HR_TICKETS = [];
 
 export const SEED_LEAVES = [];
 

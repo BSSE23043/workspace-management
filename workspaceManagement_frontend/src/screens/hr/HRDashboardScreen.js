@@ -16,8 +16,35 @@ export const HRDashboardScreen = ({ navigation }) => {
   const palette = getRolePalette('HR');
 
   const { tickets } = useSelector((state) => state.tickets);
+  const { logs } = useSelector((state) => state.attendance);
+  const { leaves } = useSelector((state) => state.leaves);
   const salaryConfig = useSelector((state) => state.salary.companyWide);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const monthLabel = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+  const todaysLogs = logs.filter((l) => l.date === todayStr);
+  const checkedInCount = todaysLogs.filter(
+    (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
+  ).length;
+  const unexcusedCount = todaysLogs.filter((l) => l.status === 'ABSENT').length;
+  const approvedLeaveCount = leaves.filter(
+    (l) =>
+      l.status === 'APPROVED' &&
+      l.startDate &&
+      l.endDate &&
+      l.startDate <= todayStr &&
+      l.endDate >= todayStr
+  ).length;
   const openTickets = tickets.filter((t) => t.status === 'OPEN').length;
+  const pendingOverrides = tickets.filter(
+    (t) =>
+      t.category === 'Attendance Correction' &&
+      (t.status === 'OPEN' || t.status === 'IN_PROGRESS')
+  ).length;
+  const recentTickets = tickets.slice(0, 4);
+
+  const pad = (n) => String(n).padStart(2, '0');
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
@@ -34,9 +61,11 @@ export const HRDashboardScreen = ({ navigation }) => {
         <View style={[styles.cycleBanner, { backgroundColor: palette.primary }]}>
           <View style={styles.bannerRow}>
             <Icon name="calendar" size={16} color="#FFFFFF" />
-            <Text style={styles.bannerTitle}>PAYROLL OPS CYCLE: Oct 15, 2026 • Live Synced</Text>
+            <Text style={styles.bannerTitle}>PAYROLL OPS CYCLE: {monthLabel} • Live Synced</Text>
           </View>
-          <Text style={styles.bannerSub}>Standard 22 billable days • Deduction rate enforced</Text>
+          <Text style={styles.bannerSub}>
+            Standard {salaryConfig.workingDaysPerPeriod} billable days • Deduction rate enforced
+          </Text>
         </View>
 
         {/* Today's Attendance 2x2 KPI Grid */}
@@ -45,19 +74,19 @@ export const HRDashboardScreen = ({ navigation }) => {
         </Text>
         <View style={styles.kpiGrid}>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiValue, { color: '#0F766E' }]}>18</Text>
+            <Text style={[styles.kpiValue, { color: '#0F766E' }]}>{pad(checkedInCount)}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Checked-In</Text>
           </View>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiValue, { color: '#DC2626' }]}>02</Text>
+            <Text style={[styles.kpiValue, { color: '#DC2626' }]}>{pad(unexcusedCount)}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Unexcused</Text>
           </View>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiValue, { color: '#2563EB' }]}>02</Text>
+            <Text style={[styles.kpiValue, { color: '#2563EB' }]}>{pad(approvedLeaveCount)}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Approved Leave</Text>
           </View>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiValue, { color: '#D97706' }]}>03</Text>
+            <Text style={[styles.kpiValue, { color: '#D97706' }]}>{pad(pendingOverrides)}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Corrections</Text>
           </View>
         </View>
@@ -75,7 +104,7 @@ export const HRDashboardScreen = ({ navigation }) => {
           </View>
 
           <Text style={[styles.cardBodyText, { color: palette.textSecondary }]}>
-            {openTickets} Active Inquiries • 2 Attendance Overrides Pending
+            {openTickets} Active Inquiries • {pendingOverrides} Attendance Overrides Pending
           </Text>
 
           <TouchableOpacity
@@ -127,30 +156,45 @@ export const HRDashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Operational Activity Feed */}
+        {/* Recent Ticket Activity */}
         <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>
-          Operational Activity Feed
+          Recent Ticket Activity
         </Text>
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <View style={styles.feedItem}>
-            <View style={[styles.feedDot, { backgroundColor: '#10B981' }]} />
-            <View style={styles.feedContent}>
-              <Text style={[styles.feedTitle, { color: palette.textPrimary }]}>
-                Attendance Override #TKT-4092 Synced
-              </Text>
-              <Text style={styles.feedSub}>Tariq Mehmood verified via physical security log</Text>
-            </View>
-          </View>
-          <View style={styles.feedDivider} />
-          <View style={styles.feedItem}>
-            <View style={[styles.feedDot, { backgroundColor: '#2563EB' }]} />
-            <View style={styles.feedContent}>
-              <Text style={[styles.feedTitle, { color: palette.textPrimary }]}>
-                October Preliminary Payroll Ready
-              </Text>
-              <Text style={styles.feedSub}>24 employee profiles computed with itemized allowances</Text>
-            </View>
-          </View>
+          {recentTickets.length === 0 ? (
+            <Text style={[styles.feedSub, { color: palette.textSecondary }]}>
+              No ticket activity yet — new employee tickets will appear here.
+            </Text>
+          ) : (
+            recentTickets.map((t, idx) => (
+              <React.Fragment key={t.id}>
+                {idx > 0 && <View style={styles.feedDivider} />}
+                <View style={styles.feedItem}>
+                  <View
+                    style={[
+                      styles.feedDot,
+                      {
+                        backgroundColor:
+                          t.status === 'RESOLVED'
+                            ? '#10B981'
+                            : t.status === 'IN_PROGRESS'
+                            ? '#2563EB'
+                            : '#D97706',
+                      },
+                    ]}
+                  />
+                  <View style={styles.feedContent}>
+                    <Text style={[styles.feedTitle, { color: palette.textPrimary }]} numberOfLines={1}>
+                      #{t.id} • {t.subject}
+                    </Text>
+                    <Text style={styles.feedSub}>
+                      {t.userName} • {t.status}
+                    </Text>
+                  </View>
+                </View>
+              </React.Fragment>
+            ))
+          )}
         </View>
       </ScrollView>
     </View>

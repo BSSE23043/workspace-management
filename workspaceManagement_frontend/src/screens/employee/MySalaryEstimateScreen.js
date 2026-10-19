@@ -79,10 +79,6 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
       absentDays: activeCycle.absentDays,
       deductionPerAbsentDay: 5000,
       deductionPerUnpaidLeaveDay: 3500,
-      allowanceItems: [
-        { id: 'trans', name: 'Transport Allowance', amount: 15000 },
-        { id: 'util', name: 'Internet & Utility Allowance', amount: 5000 },
-      ],
     });
   }, [activeCycle]);
 
@@ -216,27 +212,6 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Itemized Monthly Allowances */}
-        <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
-              Itemized Monthly Allowances
-            </Text>
-            <Text style={[styles.totalAllowText, { color: '#16A34A' }]}>
-              +{formatCurrency(estimate.totalAllowances)}
-            </Text>
-          </View>
-
-          {estimate.allowanceItems.map((alw) => (
-            <View key={alw.id} style={styles.itemRow}>
-              <Text style={[styles.itemLabel, { color: palette.textSecondary }]}>{alw.name}:</Text>
-              <Text style={[styles.itemVal, { color: '#16A34A' }]}>
-                +{formatCurrency(alw.amount)}
-              </Text>
-            </View>
-          ))}
-        </View>
-
         {/* Transparent Salary Calculation Rule & HR Ticket Link */}
         <View style={[styles.formulaCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <View style={styles.formulaHeaderRow}>
@@ -246,7 +221,7 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
             </Text>
           </View>
           <Text style={[styles.formulaText, { color: palette.textSecondary }]}>
-            Net = Base (150,000) - Total Deductions (8,500) + Fixed Allowances (20,000) = 161,500 PKR
+            {`Net = Base (${estimate.baseSalary.toLocaleString()}) - Total Deductions (${estimate.totalDeductions.toLocaleString()}) = ${estimate.netSalary.toLocaleString()} PKR`}
           </Text>
 
           <TouchableOpacity
@@ -400,10 +375,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   totalDeductText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  totalAllowText: {
     fontSize: 14,
     fontWeight: '800',
   },

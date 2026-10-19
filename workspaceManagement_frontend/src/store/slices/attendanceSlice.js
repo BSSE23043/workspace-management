@@ -77,11 +77,16 @@ const attendanceSlice = createSlice({
       }
     },
     overrideAttendance: (state, action) => {
-      const { userId, date = '2026-10-12', checkOutTime = '05:15 PM', checkInTime = '09:02 AM', note } = action.payload;
-      const record = state.logs.find((l) => l.userId === userId && (l.date === date || l.userId === userId));
+      const { userId, date, checkOutTime, checkInTime, note } = action.payload;
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const dateStr = date || now.toISOString().split('T')[0];
+      const inStr = checkInTime || timeStr;
+      const outStr = checkOutTime || timeStr;
+      const record = state.logs.find((l) => l.userId === userId && l.date === dateStr);
       if (record) {
-        record.checkInTime = checkInTime;
-        record.checkOutTime = checkOutTime;
+        record.checkInTime = inStr;
+        record.checkOutTime = outStr;
         record.status = 'CORRECTED_PRESENT';
         record.statusCategory = 'HR CORRECTED RECORDS';
         record.correctionNote = note || 'HR Corrected via ticket override';
@@ -91,9 +96,9 @@ const attendanceSlice = createSlice({
           userId,
           userName: action.payload.userName || 'Employee',
           department: '',
-          date,
-          checkInTime,
-          checkOutTime,
+          date: dateStr,
+          checkInTime: inStr,
+          checkOutTime: outStr,
           distanceMeters: 0,
           status: 'CORRECTED_PRESENT',
           statusCategory: 'HR CORRECTED RECORDS',

@@ -19,7 +19,8 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
   const palette = getRolePalette('HR');
 
   const { logs } = useSelector((state) => state.attendance);
-  const [selectedDate, setSelectedDate] = useState('2026-10-18');
+  const deviceToday = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(deviceToday);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [refreshing, setRefreshing] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
@@ -31,25 +32,36 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
     }, 700);
   }, []);
 
+  const shiftDate = (dateStr, days) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + days));
+    return dt.toISOString().split('T')[0];
+  };
+
+  const dateLogs = useMemo(
+    () => logs.filter((l) => l.date === selectedDate),
+    [logs, selectedDate]
+  );
+
   const presentList = useMemo(
-    () => logs.filter((l) => l.status === 'PRESENT' || l.statusCategory === 'PRESENT & VERIFIED'),
-    [logs]
+    () => dateLogs.filter((l) => l.status === 'PRESENT' || l.statusCategory === 'PRESENT & VERIFIED'),
+    [dateLogs]
   );
   const openSessionList = useMemo(
-    () => logs.filter((l) => !l.checkOutTime && l.status === 'PRESENT'),
-    [logs]
+    () => dateLogs.filter((l) => !l.checkOutTime && l.status === 'PRESENT'),
+    [dateLogs]
   );
   const correctedList = useMemo(
-    () => logs.filter((l) => l.status === 'CORRECTED_PRESENT' || l.statusCategory === 'HR CORRECTED RECORDS'),
-    [logs]
+    () => dateLogs.filter((l) => l.status === 'CORRECTED_PRESENT' || l.statusCategory === 'HR CORRECTED RECORDS'),
+    [dateLogs]
   );
   const absentList = useMemo(
-    () => logs.filter((l) => l.status === 'ABSENT' || l.status === 'ON_LEAVE' || l.statusCategory === 'UNEXCUSED ABSENT'),
-    [logs]
+    () => dateLogs.filter((l) => l.status === 'ABSENT' || l.status === 'ON_LEAVE' || l.statusCategory === 'UNEXCUSED ABSENT'),
+    [dateLogs]
   );
 
   const statusPills = [
-    { id: 'ALL', label: 'All', count: logs.length },
+    { id: 'ALL', label: 'All', count: dateLogs.length },
     { id: 'PRESENT', label: 'Present', count: presentList.length },
     { id: 'OPEN', label: 'Open Punch', count: openSessionList.length },
     { id: 'ABSENT', label: 'Absent/Leave', count: absentList.length },
@@ -89,14 +101,14 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
   }, [presentList, correctedList, absentList, selectedStatus]);
 
   const formattedDisplayDate = useMemo(() => {
-    if (selectedDate === '2026-10-18') return 'Oct 18, 2026 (Today)';
     const p = selectedDate.split('-');
     if (p.length === 3) {
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${months[parseInt(p[1], 10) - 1]} ${parseInt(p[2], 10)}, ${p[0]}`;
+      const label = `${months[parseInt(p[1], 10) - 1]} ${parseInt(p[2], 10)}, ${p[0]}`;
+      return selectedDate === deviceToday ? `${label} (Today)` : label;
     }
     return selectedDate;
-  }, [selectedDate]);
+  }, [selectedDate, deviceToday]);
 
   const handleAuditDayLog = () => {
     Alert.alert(
@@ -180,7 +192,7 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
       <View style={[styles.dateBar, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
         <TouchableOpacity
           style={styles.stepBtn}
-          onPress={() => setSelectedDate('2026-10-17')}
+          onPress={() => setSelectedDate((d) => shiftDate(d, -1))}
           accessibilityLabel="Previous Day"
         >
           <Text style={styles.stepBtnText}>&lt;</Text>
@@ -199,7 +211,7 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
 
         <TouchableOpacity
           style={styles.stepBtn}
-          onPress={() => setSelectedDate('2026-10-19')}
+          onPress={() => setSelectedDate((d) => shiftDate(d, 1))}
           accessibilityLabel="Next Day"
         >
           <Text style={styles.stepBtnText}>&gt;</Text>
@@ -207,7 +219,7 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
 
         <TouchableOpacity
           style={[styles.todayBtn, { backgroundColor: palette.primary }]}
-          onPress={() => setSelectedDate('2026-10-18')}
+          onPress={() => setSelectedDate(deviceToday)}
         >
           <Text style={styles.todayBtnText}>Today</Text>
         </TouchableOpacity>
@@ -270,11 +282,18 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
             tintColor={palette.primary}
           />
         }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
+              No attendance punches recorded for {formattedDisplayDate}.
+            </Text>
+          </View>
+        }
         ListFooterComponent={
           <View style={[styles.footerCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
             <Icon name="checkmark-circle" size={16} color="#16A34A" />
             <Text style={[styles.footerCardText, { color: palette.textPrimary }]}>
-              Total Displayed: {logs.length} Employees • ALL RECORDS SYNCED
+              Total Displayed: {dateLogs.length} Records • ALL RECORDS SYNCED
             </Text>
           </View>
         }
@@ -439,6 +458,13 @@ const styles = StyleSheet.create({
   footerCardText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 13,
   },
   bottomBar: {
     position: 'absolute',

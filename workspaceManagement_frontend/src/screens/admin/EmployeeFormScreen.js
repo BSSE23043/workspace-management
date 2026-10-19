@@ -229,7 +229,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
             label="Full Name *"
             value={name}
             onChangeText={setName}
-            placeholder="e.g. Ali Raza"
+            placeholder="e.g. Staff Member"
             error={submitted && !name.trim() ? '! Full name is required' : null}
           />
 

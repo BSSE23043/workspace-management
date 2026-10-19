@@ -31,7 +31,7 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
   const palette = getRolePalette('EMPLOYEE');
 
   const { leaves } = useSelector((state) => state.leaves);
-  const myLeaves = leaves.filter((l) => l.userId === currentUser?.id || l.userId === 'EMP-089');
+  const myLeaves = leaves.filter((l) => l.userId === currentUser?.id);
 
   const [selectedType, setSelectedType] = useState('Annual Leave • Paid');
   const [startDate, setStartDate] = useState('2026-10-20');
@@ -93,7 +93,7 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>Submit Leave Request</Text>
           <Text style={[styles.cardSubtitle, { color: palette.textSecondary }]}>
-            Requests are verified against sprint commitments &amp; department overlap
+            Requests are verified against sprint commitments &amp; team availability
           </Text>
 
           {/* Leave Type Selector Chips */}

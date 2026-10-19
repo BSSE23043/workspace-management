@@ -48,15 +48,14 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
   const [selectedTab, setSelectedTab] = useState('ALL');
 
   // Filter tasks to this employee (supports both assignedToId and multi-assignees assignedToIds)
-  const currentUserId = currentUser?.id || 'EMP-089';
+  const currentUserId = currentUser?.id || '';
   const myTasks = tasks.filter(
     (t) =>
       t.assignedToId === currentUserId ||
-      t.assignedToId === 'EMP-089' ||
-      (Array.isArray(t.assignedToIds) && (t.assignedToIds.includes(currentUserId) || t.assignedToIds.includes('EMP-089')))
+      (Array.isArray(t.assignedToIds) && t.assignedToIds.includes(currentUserId))
   );
 
-  const [selectedTaskId, setSelectedTaskId] = useState(myTasks[0]?.id || 'TSK-408');
+  const [selectedTaskId, setSelectedTaskId] = useState(myTasks[0]?.id || '');
   const activeTask = myTasks.find((t) => t.id === selectedTaskId) || myTasks[0];
 
   // State updates for active task

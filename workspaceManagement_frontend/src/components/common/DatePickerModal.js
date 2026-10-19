@@ -21,7 +21,7 @@ export const DatePickerModal = ({
   visible,
   onClose,
   onSelectDate,
-  initialDate = '2026-10-18',
+  initialDate = new Date().toISOString().split('T')[0],
   title = 'Select Date',
   minDate,
   maxDate,
@@ -29,14 +29,14 @@ export const DatePickerModal = ({
   const { getRolePalette } = useTheme();
   const palette = getRolePalette();
 
-  // Parse initialDate YYYY-MM-DD
+  // Parse initialDate YYYY-MM-DD (fallback = real device date)
   const parseDate = (dStr) => {
-    if (!dStr) return new Date(2026, 9, 18);
+    if (!dStr) return new Date();
     const parts = dStr.split('-');
     if (parts.length === 3) {
       return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
     }
-    return new Date(2026, 9, 18);
+    return new Date();
   };
 
   const initialParsed = parseDate(initialDate);
@@ -44,10 +44,12 @@ export const DatePickerModal = ({
   const [currentMonth, setCurrentMonth] = useState(initialParsed.getMonth()); // 0-11
   const [selectedDay, setSelectedDay] = useState(initialParsed.getDate());
 
-  // Today reference is fixed to Oct 18, 2026
-  const TODAY_YEAR = 2026;
-  const TODAY_MONTH = 9; // Oct
-  const TODAY_DAY = 18;
+  // Today reference = real device date (was hardcoded to Oct 18, 2026)
+  const todayNow = new Date();
+  const TODAY_YEAR = todayNow.getFullYear();
+  const TODAY_MONTH = todayNow.getMonth();
+  const TODAY_DAY = todayNow.getDate();
+  const TODAY_BADGE = `${MONTH_NAMES[TODAY_MONTH].slice(0, 3)} ${TODAY_DAY}`;
 
   const handlePrevMonth = () => {
     if (currentMonth === 0) {
@@ -123,7 +125,7 @@ export const DatePickerModal = ({
               </Text>
             </View>
             <TouchableOpacity onPress={handleJumpToToday} style={[styles.todayBadge, { backgroundColor: palette.badge }]}>
-              <Text style={[styles.todayBadgeText, { color: palette.primary }]}>Today (Oct 18)</Text>
+              <Text style={[styles.todayBadgeText, { color: palette.primary }]}>Today ({TODAY_BADGE})</Text>
             </TouchableOpacity>
           </View>
 

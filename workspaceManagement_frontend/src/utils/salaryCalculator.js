@@ -1,7 +1,9 @@
 // HR-Configurable Salary Calculation Formula (Formula 4.2)
 // A_unexcused = max(0, W - (P + L_paid + L_unpaid))
 // D_total = (A_unexcused * R_absent) + (L_unpaid * R_unpaid)
-// S_net = S_base - D_total + B
+// S_net = S_base - D_total
+// (the syllabus formula's B allowance term was removed — allowances no
+// longer exist in config or payroll)
 
 export const calculateSalaryEstimate = ({
   baseSalary = 150000,
@@ -12,11 +14,6 @@ export const calculateSalaryEstimate = ({
   absentDays = null, // if provided, overrides unexcused formula or verifies it
   deductionPerAbsentDay = 5000,
   deductionPerUnpaidLeaveDay = 3500,
-  allowances = 20000, // Total or array of items
-  allowanceItems = [
-    { id: 'trans', name: 'Transport Allowance', amount: 15000 },
-    { id: 'net', name: 'Internet & Utility Allowance', amount: 5000 },
-  ],
 }) => {
   const S_base = Number(baseSalary) || 0;
   const W = Number(workingDaysPerPeriod) || 22;
@@ -35,16 +32,10 @@ export const calculateSalaryEstimate = ({
   const unpaidLeaveDeductionTotal = L_unpaid * R_unpaid;
   const totalDeductions = absentDeductionTotal + unpaidLeaveDeductionTotal;
 
-  // Allowances total
-  let totalAllowances = Number(allowances) || 0;
-  if (Array.isArray(allowanceItems) && allowanceItems.length > 0) {
-    totalAllowances = allowanceItems.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
-  }
-
   // Daily pro-rata rate for reference
   const dailyProRataRate = W > 0 ? Math.round(S_base / W) : 0;
 
-  const netSalary = S_base - totalDeductions + totalAllowances;
+  const netSalary = S_base - totalDeductions;
 
   return {
     baseSalary: S_base,
@@ -59,8 +50,6 @@ export const calculateSalaryEstimate = ({
     absentDeductionTotal,
     unpaidLeaveDeductionTotal,
     totalDeductions,
-    totalAllowances,
-    allowanceItems,
     netSalary,
   };
 };

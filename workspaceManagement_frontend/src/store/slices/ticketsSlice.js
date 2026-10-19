@@ -1,8 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { SEED_HR_TICKETS } from '../../data/seedData';
 
 const initialState = {
-  tickets: [...SEED_HR_TICKETS],
+  tickets: [],
 };
 
 const ticketsSlice = createSlice({
@@ -46,7 +45,7 @@ const ticketsSlice = createSlice({
         t.timeline.push({
           sender: 'HR Operations',
           time: 'Just now',
-          message: note || 'Ticket status changed to IN_PROGRESS. HR is actively investigating with relevant departments.',
+          message: note || 'Ticket status changed to IN_PROGRESS. HR is actively investigating with the relevant teams.',
         });
       }
     },
@@ -87,7 +86,7 @@ const ticketsSlice = createSlice({
         });
       }
     },
-    resetTickets: () => ({ tickets: [...SEED_HR_TICKETS] }),
+    resetTickets: () => ({ tickets: [] }),
   },
 });
 

@@ -83,10 +83,14 @@ export const AttendanceActionScreen = ({ navigation }) => {
   // useReducer hook for GPS telemetry
   const [gpsState, dispatch] = useReducer(gpsReducer, initialGPSState);
 
+  const todayStr = new Date().toISOString().split('T')[0];
   const todayRecord = logs.find(
-    (l) => l.userId === currentUser?.id || l.userId === 'EMP-089'
+    (l) => l.userId === currentUser?.id && l.date === todayStr
   );
   const isCheckedIn = Boolean(todayRecord && todayRecord.status === 'PRESENT');
+
+  // This user's own punch history (newest first — slice unshifts new logs), max 5 shown
+  const myRecentLogs = logs.filter((l) => l.userId === currentUser?.id).slice(0, 5);
 
   const handleToggleShiftPunch = () => {
     if (!gpsState.isInside) {
@@ -99,7 +103,7 @@ export const AttendanceActionScreen = ({ navigation }) => {
     }
 
     if (isCheckedIn) {
-      reduxDispatch(checkOut({ userId: currentUser?.id || 'EMP-089' }));
+      reduxDispatch(checkOut({ userId: currentUser?.id || '' }));
       Alert.alert('Check-Out Confirmed', 'You have successfully punched out of your current shift.');
     } else {
       reduxDispatch(
@@ -260,20 +264,44 @@ export const AttendanceActionScreen = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
 
-        {/* Recent Punch Logs */}
+        {/* Recent Punch Logs — real punches from Redux */}
         <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
           Recent Punch Logs
         </Text>
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <View style={styles.logRow}>
-            <Icon name="checkmark-circle" size={16} color="#16A34A" />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.logTitle, { color: palette.textPrimary }]}>
-                Today, 09:02 AM • Shift Check-In
-              </Text>
-              <Text style={styles.logSub}>Radial: 14.2m • BSSID: AcmeCorp-Internal • Verified</Text>
-            </View>
-          </View>
+          {myRecentLogs.length === 0 ? (
+            <Text style={[styles.logSub, { color: palette.textSecondary }]}>
+              No punches yet — use the Check In button above.
+            </Text>
+          ) : (
+            myRecentLogs.map((log, idx) => (
+              <View key={log.id}>
+                {idx > 0 && <View style={styles.logDivider} />}
+                <View style={styles.logRow}>
+                  <Icon
+                    name="checkmark-circle"
+                    size={16}
+                    color={
+                      log.status === 'PRESENT' || log.status === 'CORRECTED_PRESENT'
+                        ? '#16A34A'
+                        : '#D97706'
+                    }
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.logTitle, { color: palette.textPrimary }]}>
+                      {log.date} • Check-In {log.checkInTime || '—'}
+                      {log.checkOutTime ? ` • Out ${log.checkOutTime}` : ''}
+                    </Text>
+                    <Text style={styles.logSub}>
+                      {log.distanceMeters > 0 ? `Radial: ${log.distanceMeters}m` : 'Manual Entry'}
+                      {log.terminal ? ` • ${log.terminal}` : ''}
+                      {log.isGeofenceVerified ? ' • Verified' : ''}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </View>
@@ -451,6 +479,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
+  },
+  logDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 8,
   },
 });
 

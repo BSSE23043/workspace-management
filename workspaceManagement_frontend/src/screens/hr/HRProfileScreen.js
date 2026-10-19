@@ -131,19 +131,19 @@ export const HRProfileScreen = ({ navigation }) => {
 
           <AppInput
             label="Direct Extension / Mobile"
-            value={currentUser?.phone || '+92 300 7654321'}
+            value={currentUser?.phone || '—'}
             editable={false}
           />
 
           <AppInput
             label="Office Station"
-            value={currentUser?.location || 'HR Bay, 2nd Floor (Station 204)'}
+            value={currentUser?.location || '—'}
             editable={false}
           />
 
           <AppInput
             label="Emergency Contact"
-            value={currentUser?.emergencyContact || 'Dr. Asim Khan (+92 321 5554321)'}
+            value={currentUser?.emergencyContact || '—'}
             editable={false}
           />
           {/* Note: DO NOT show a "Save Profile Information" button per blueprint specification */}

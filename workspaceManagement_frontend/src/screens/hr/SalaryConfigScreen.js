@@ -26,21 +26,6 @@ const salaryReducer = (state, action) => {
       nextState.dailyProRata = days > 0 ? Math.round(base / days) : 0;
       return nextState;
     }
-    case 'ADD_ALLOWANCE': {
-      return {
-        ...state,
-        allowanceItems: [
-          ...state.allowanceItems,
-          { id: `alw_${Date.now()}`, name: action.payload.name || 'Custom Allowance', amount: action.payload.amount || 5000 },
-        ],
-      };
-    }
-    case 'REMOVE_ALLOWANCE': {
-      return {
-        ...state,
-        allowanceItems: state.allowanceItems.filter((item) => item.id !== action.id),
-      };
-    }
     case 'LOAD_CONFIG': {
       const base = Number(action.payload.baseSalary || 150000);
       const days = Number(action.payload.expectedWorkingDays || action.payload.workingDaysPerPeriod || 22);
@@ -50,10 +35,6 @@ const salaryReducer = (state, action) => {
         dailyProRata: days > 0 ? Math.round(base / days) : 0,
         deductionPerAbsentDay: String(action.payload.deductionPerAbsentDay || 5000),
         deductionPerUnpaidLeaveDay: String(action.payload.deductionPerUnpaidLeaveDay || 3500),
-        allowanceItems: action.payload.allowanceItems || [
-          { id: 'alw_trans', name: 'Transport Allowance', amount: 15000 },
-          { id: 'alw_net', name: 'Internet & Utility Allowance', amount: 5000 },
-        ],
       };
     }
     default:
@@ -67,10 +48,6 @@ const initialSalaryState = {
   dailyProRata: 6818,
   deductionPerAbsentDay: '5000',
   deductionPerUnpaidLeaveDay: '3500',
-  allowanceItems: [
-    { id: 'alw_trans', name: 'Transport Allowance', amount: 15000 },
-    { id: 'alw_net', name: 'Internet & Utility Allowance', amount: 5000 },
-  ],
 };
 
 export const SalaryConfigScreen = ({ navigation }) => {
@@ -90,7 +67,7 @@ export const SalaryConfigScreen = ({ navigation }) => {
   }, []);
 
   const [activeScope, setActiveScope] = useState('COMPANY'); // 'COMPANY' | 'OVERRIDE'
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('EMP-089'); // Ali Raza
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
 
   const eligibleEmployees = (users || []).filter(
     (u) => u.role === 'EMPLOYEE' || u.role === 'MANAGER'
@@ -130,13 +107,6 @@ export const SalaryConfigScreen = ({ navigation }) => {
     }
   };
 
-  const handleAddAllowancePrompt = () => {
-    dispatch({
-      type: 'ADD_ALLOWANCE',
-      payload: { name: 'Shift Hardship Allowance', amount: 5000 },
-    });
-  };
-
   const handleSave = () => {
     if (!isValid) {
       Alert.alert('Invalid Input', 'Please enter valid numbers for all salary parameters.');
@@ -148,15 +118,16 @@ export const SalaryConfigScreen = ({ navigation }) => {
       workingDaysPerPeriod: parseInt(state.expectedWorkingDays, 10),
       deductionPerAbsentDay: parseInt(state.deductionPerAbsentDay, 10),
       deductionPerUnpaidLeaveDay: parseInt(state.deductionPerUnpaidLeaveDay, 10),
-      allowanceItems: state.allowanceItems,
     };
 
     if (activeScope === 'COMPANY') {
       reduxDispatch(updateCompanySalaryConfig(payload));
       Alert.alert('Saved', 'Company-wide default salary policies updated.');
+    } else if (selectedEmployee) {
+      reduxDispatch(updateEmployeeSalaryOverride({ userId: selectedEmployee.id, config: payload }));
+      Alert.alert('Saved', `Employee custom salary override updated for ${selectedEmployee.name || 'employee'}.`);
     } else {
-      reduxDispatch(updateEmployeeSalaryOverride({ userId: selectedEmployeeId, config: payload }));
-      Alert.alert('Saved', `Employee custom salary override updated for ${selectedEmployee?.name || 'employee'}.`);
+      Alert.alert('No Employee Selected', 'Select an employee before saving an override.');
     }
   };
 
@@ -305,38 +276,6 @@ export const SalaryConfigScreen = ({ navigation }) => {
           />
         </View>
 
-        {/* Dynamic Fixed Allowances Card */}
-        <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <View style={styles.allowanceHeaderRow}>
-            <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
-              Fixed Monthly Allowances
-            </Text>
-            <TouchableOpacity
-              style={[styles.addAllowanceBtn, { backgroundColor: palette.badge }]}
-              onPress={handleAddAllowancePrompt}
-            >
-              <Text style={[styles.addAllowanceBtnText, { color: palette.primary }]}>+ Add Allowance</Text>
-            </TouchableOpacity>
-          </View>
-
-          {state.allowanceItems.map((item) => (
-            <View key={item.id} style={[styles.allowanceRow, { borderColor: palette.cardBorder }]}>
-              <View style={styles.allowanceInfo}>
-                <Text style={[styles.allowanceName, { color: palette.textPrimary }]}>{item.name}</Text>
-                <Text style={[styles.allowanceAmount, { color: palette.textSecondary }]}>
-                  +{Number(item.amount).toLocaleString()} PKR
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => dispatch({ type: 'REMOVE_ALLOWANCE', id: item.id })}
-                style={styles.removeBtn}
-              >
-                <Icon name="trash" size={16} color="#DC2626" />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-
         {/* Inline Confirmation or Error banner */}
         {isValid ? (
           <View style={styles.validBanner}>
@@ -411,45 +350,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#0F766E',
-  },
-  allowanceHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  addAllowanceBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-  },
-  addAllowanceBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  allowanceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
-  },
-  allowanceInfo: {
-    flex: 1,
-  },
-  allowanceName: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  allowanceAmount: {
-    fontSize: 12,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  removeBtn: {
-    padding: 6,
   },
   validBanner: {
     flexDirection: 'row',

@@ -10,7 +10,6 @@ export const IMAGES = {
   appLogo: require('./app_logo.png'),
   mapLahoreCampus: require('./map_lahore_campus.png'),
   telemetryCampusHub: require('./telemetry_campus_hub.jpg'),
-  evidenceSignoutSheet: require('./evidence_signout_sheet.jpg'),
 };
 
 export const getAvatarSource = (avatarKeyOrUri) => {

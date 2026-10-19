@@ -199,7 +199,7 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search employees by name, email, dept..."
+          placeholder="Search employees by name or email..."
           placeholderTextColor="#94A3B8"
           style={[styles.searchInput, { color: palette.textPrimary }]}
         />
