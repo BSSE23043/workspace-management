@@ -60,7 +60,7 @@ repo/                                  (git root; branches: main, Samer, Umar[cu
 | Node | >= 22.11.0 | Hermes enabled, new-architecture era |
 | Navigation | `@react-navigation/native` 7.x + native-stack, bottom-tabs, drawer | + screens, safe-area-context, gesture-handler, reanimated, worklets |
 | State | `@reduxjs/toolkit` 2.x + `react-redux` 9.x | **All reducers synchronous**; `serializableCheck: false`; no thunks |
-| Session/theme | React Context | `AuthContext`, `ThemeContext` |
+| Session/theme | React Context (session) + Redux (theme) | `AuthContext`; dark/light flag lives in `themeSlice` |
 | Storage | `@react-native-async-storage/async-storage` 3.x | Keys namespaced `@wms_*` |
 | HTTP | — | No HTTP calls anywhere; `fetch` demos removed (not in syllabus concepts) |
 | Icons | Custom unicode `Icon` component | `@expo/vector-icons` is installed but **never used** |
@@ -70,7 +70,7 @@ repo/                                  (git root; branches: main, Samer, Umar[cu
 ## 4. Architecture
 
 ### Entry & Providers (`App.js` nesting order)
-`Redux Provider` → `ThemeProvider` → `AuthProvider` → `SafeAreaProvider` → `ThemedStatusBar` + `AppNavigator`.
+`Redux Provider` → `ThemeBootstrap` (restores saved theme once) → `AuthProvider` → `SafeAreaProvider` → `ThemedStatusBar` + `AppNavigator`.
 `index.js` imports `react-native-gesture-handler` first (required for drawer).
 
 ### Navigation (`src/navigation/`)
@@ -116,17 +116,18 @@ repo/                                  (git root; branches: main, Samer, Umar[cu
 src/
 ├── assets/images/          index.js asset map + 11 images (currently 1x1 px placeholder stubs)
 ├── components/common/      AppInput, DatePickerModal, HeaderBar, Icon
-├── context/                AuthContext.js, ThemeContext.js
+├── context/                AuthContext.js (ThemeContext removed — theme is in Redux now)
 ├── data/seedData.js        seed "database": company, salary config, HR tickets only;
 │                           attendance / leaves / tasks / requirements seeds are
 │                           now empty arrays
 │                           — SEED_USERS + SEED_DEPARTMENTS + SEED_ANNOUNCEMENTS
 │                           + SEED_NOTIFICATIONS **removed**
+├── hooks/                  useTheme.js (Redux-backed theme + role palette)
 ├── navigation/             AppNavigator + 5 role navigators + SuperAdminNavigator (see §4)
 ├── screens/                34 screens (see §6)
 ├── services/               storageService.js (AsyncStorage + seed/reset),
 │                           taskService.js + requirementService.js (load/save + mutations)
-├── store/                  index.js + slices/ (5 slices, see §7)
+├── store/                  index.js + slices/ (2 slices: company, theme — see §7)
 └── utils/                  geofence.js, imagePicker.js, permissions.js, salaryCalculator.js, superAdminConfig.js, timeAgo.js, validation.js
 ```
 
@@ -159,8 +160,9 @@ src/
   (one-time demo-user purge guarded by `@wms_demo_users_cleaned`; also backfills a missing
   `companyId` onto any Admin at login) then restore
   `@wms_auth_current_user` + 500 ms splash. Passwords stored in **plaintext** in AsyncStorage.
-- **`ThemeContext`**: light/dark persisted to `@wms_theme_preference`; `ROLE_THEMES` —
-  ADMIN `#1E293B`, HR `#0F766E`, MANAGER `#1D4ED8`, EMPLOYEE `#4338CA`, CLIENT `#92400E`.
+- **Theme (Redux `store/slices/themeSlice.js` + `src/hooks/useTheme.js`)**: light/dark persisted to
+  `@wms_theme_preference`; `ROLE_THEMES` — ADMIN `#1E293B`, HR `#0F766E`, MANAGER `#1D4ED8`,
+  EMPLOYEE `#4338CA`, CLIENT `#92400E`.
 
 ## 6. Screens Inventory (34)
 
@@ -243,24 +245,24 @@ account + the admin-set Company Profile name loaded from `@wms_company` in `comp
 
 ## 7. Redux Store
 
-`configureStore({ company, attendance, salary, leaves, tickets })`.
+`configureStore({ company, theme })` — **only two slices remain.**
 **State is in-memory only — NOT rehydrated from AsyncStorage**
 (only the auth session + company profile persist). All reducers synchronous. **No users slice** — the user list
 lives exclusively in AsyncStorage `@wms_users`; screens load it into local state.
-**No `tasks` / `requirements` slices** — those datasets live in AsyncStorage `@wms_tasks` /
-`@wms_requirements` and are read/written through `services/taskService.js` and
-`services/requirementService.js` (screens hold them in local `useState`, load on mount + focus).
+**No `tasks` / `requirements` / `tickets` / `leaves` / `attendance` / `salary` slices** — those datasets live
+in AsyncStorage (`@wms_tasks`, `@wms_requirements`, `@wms_tickets`, `@wms_leaves`, `@wms_attendance`,
+`@wms_salary_config`) and are read/written through the matching `services/*Service.js` (screens hold them in
+local `useState`, load on mount + focus).
 
 | Slice | State | Notable actions |
 |---|---|---|
 | company | flat company profile (geofence, policies) | updateCompanyProfile |
-| attendance | `{ logs[] }` | checkIn (geofence-verified), checkOut, overrideAttendance (→ CORRECTED_PRESENT) |
-| salary | `{ companyWide, overrides{} }` | updateCompanySalaryConfig, updateEmployeeSalaryOverride |
-| leaves | `{ leaves[] }` | applyLeave (PENDING), approveLeave, rejectLeave |
-| tickets | `{ tickets[] }` | createTicket (timeline), markInProgress, resolveTicket, reopenTicket, rejectTicket, addTicketMessage |
+| theme | `{ isDark }` | setDarkMode (restores saved theme at boot + persists every toggle to `@wms_theme_preference`) |
 
 ~~`announcements`~~ + ~~`notifications`~~ slices **deleted** (features removed);
-~~`tasks`~~ + ~~`requirements`~~ slices **deleted** (moved to AsyncStorage — see §8).
+~~`users`~~ slice deleted earlier; ~~`tasks`~~ + ~~`requirements`~~ + ~~`tickets`~~ + ~~`leaves`~~ +
+~~`attendance`~~ + ~~`salary`~~ slices **deleted** (moved to AsyncStorage — see §8).
+The theme flag was moved out of the old `ThemeContext` into the `theme` slice (see §5).
 
 ## 8. Services & Storage
 
@@ -310,9 +312,9 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
 
 ## 10. Known Caveats / Tech Debt
 
-- No backend; the 5 Redux slices reset on app reload (auth session persists; users persist in
-  AsyncStorage and are loaded into local state by each screen; tasks/requirements persist in
-  AsyncStorage and survive reloads — they are the data a reload used to destroy).
+- No backend; the Redux store (company + theme) resets on app reload (auth session persists; users persist in
+  AsyncStorage and are loaded into local state by each screen; tasks/requirements/tickets/leaves/attendance/
+  salary persist in AsyncStorage and survive reloads — they are the data a reload used to destroy).
 - Plaintext passwords in AsyncStorage; Super Admin credentials hardcoded in `superAdminConfig.js` (fine for a course project).
 - Removing a Company Admin only removes them from AsyncStorage USERS (an already-open session of theirs would persist until logout).
 - All image assets are 1x1-px placeholder stubs (blueprint lists required real images).
@@ -334,6 +336,22 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
 
 ## Changelog (append every change/pull/merge on `Umar`)
 
+- **2026-10-19** — **Theme moved out of `ThemeContext` into Redux; `ThemeContext` deleted.**
+  - New `store/slices/themeSlice.js` holds `{ isDark }` with a `setDarkMode` action; `store/index.js` is
+    now `company` + `theme` (2 slices).
+  - New `src/hooks/useTheme.js` is a drop-in replacement for the old context hook — it returns the same
+    `{ isDark, toggleTheme, getRolePalette }` (theme via `useSelector`, `toggleTheme` persists to
+    `@wms_theme_preference` through `storageService`, `getRolePalette` rebuilt from `ROLE_THEMES`). The
+    shape is unchanged, so no screen body changed — only the import path moved for **44 files**
+    (`context/ThemeContext` → `hooks/useTheme`).
+  - `App.js`: `ThemeProvider` replaced by a small `ThemeBootstrap` (inside `Provider`) that restores the
+    saved theme once; `ThemedStatusBar` reads `isDark` from the hook. Nesting is now
+    `Redux Provider → ThemeBootstrap → AuthProvider → SafeAreaProvider → ThemedStatusBar + AppNavigator`.
+  - `src/context/ThemeContext.js` **deleted**; `AuthContext` remains, so the Context concept is still used.
+  - Cleaned the literal `(ThemeContext)` labels on the 5 profile screens + the `superAdminConfig.js`
+    comment (client `ProfileSettingsScreen`'s class-component toggle was never context-based).
+  - Verified: no `context/ThemeContext` imports remain; Babel walk **TOTAL FILES 70, FAILURES 0**; Metro
+    bundle writes successfully.
 - **2026-10-19** — **Resolved the `merge_Umar-2_Manal` conflict-resolution artifacts and audited Manal's changes for compatibility.**
   - Merge commit `e1bd7b2` (parents: `acbfa53` Umar-2, `ca2db91` origin/Manal) had a bad "Accept both
     changes" in `src/screens/employee/EmployeeDashboardScreen.js`: duplicate `activeTask` declaration
@@ -503,8 +521,8 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
     sites). `SEED_TASKS`/`SEED_REQUIREMENTS` stay `[]` purely so the first-run seed can write the
     keys. Verified: no `state.tasks`/`state.requirements`/slice imports remain anywhere, and all
     64 src files parse clean (Babel walk).
-  - Not done (deferred to a later step, per user): moving the `theme` value out of
-    `ThemeContext` into Redux.
+  - (Later done — see the "Theme moved out of `ThemeContext` into Redux" entry at the top: the
+    `theme` value now lives in the Redux `theme` slice.)
 - **2026-10-19** — **Manager now sees the broadcasts he publishes (author + time ago).**
   - Bug: the "Publish Client-Visible Progress Update" card had no output — a broadcast was dispatched
     and confirmed with an alert, but the requirement screen never rendered `broadcasts`, so the

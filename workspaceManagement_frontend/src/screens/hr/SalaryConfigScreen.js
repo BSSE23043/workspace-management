@@ -8,7 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { loadSalaryConfig, updateCompanySalaryConfig, updateEmployeeSalaryOverride } from '../../services/salaryService';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';

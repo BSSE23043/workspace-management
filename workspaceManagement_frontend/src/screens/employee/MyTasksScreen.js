@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import { loadTasks, updateTaskStatus, addTaskLog } from '../../services/taskService';
 import { timeAgo } from '../../utils/timeAgo';
 import HeaderBar from '../../components/common/HeaderBar';

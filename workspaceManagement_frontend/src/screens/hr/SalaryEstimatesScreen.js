@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { loadLeaves } from '../../services/leaveService';
 import { loadAttendance } from '../../services/attendanceService';

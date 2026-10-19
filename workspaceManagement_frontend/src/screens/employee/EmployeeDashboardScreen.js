@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import { loadTasks } from '../../services/taskService';
 import { loadLeaves } from '../../services/leaveService';
 import { loadAttendance } from '../../services/attendanceService';

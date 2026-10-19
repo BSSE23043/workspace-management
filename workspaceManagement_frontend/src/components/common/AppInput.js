@@ -1,6 +1,6 @@
 import React, { useState, forwardRef } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import Icon from './Icon';
 
 export const AppInput = forwardRef(

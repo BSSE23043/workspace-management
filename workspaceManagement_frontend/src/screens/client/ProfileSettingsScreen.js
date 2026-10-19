@@ -165,7 +165,7 @@ export class ProfileSettingsScreen extends React.Component {
             <Text style={styles.cardTitle}>Appearance &amp; Theme</Text>
             <View style={styles.prefRow}>
               <View>
-                <Text style={styles.prefTitle}>Dark Mode Theme (ThemeContext)</Text>
+                <Text style={styles.prefTitle}>Dark Mode Theme</Text>
                 <Text style={styles.prefSub}>Class component state toggle</Text>
               </View>
               <Switch

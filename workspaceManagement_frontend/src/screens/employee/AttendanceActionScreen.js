@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { checkIn, checkOut, loadAttendance } from '../../services/attendanceService';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { IMAGES } from '../../assets/images';

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { approveLeave, rejectLeave, loadLeaves } from '../../services/leaveService';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';

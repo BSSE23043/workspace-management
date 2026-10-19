@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { loadTickets } from '../../services/ticketService';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 

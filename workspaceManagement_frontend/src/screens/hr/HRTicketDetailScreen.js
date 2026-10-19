@@ -18,7 +18,7 @@ import {
   reopenTicket,
 } from '../../services/ticketService';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 // Shared "time ago" label — same one the requirement broadcasts use.
