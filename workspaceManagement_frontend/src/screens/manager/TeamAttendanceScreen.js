@@ -11,6 +11,7 @@ import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { loadLeaves } from '../../services/leaveService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
@@ -30,8 +31,22 @@ export const TeamAttendanceScreen = ({ navigation }) => {
     })();
   }, []);
 
+  // Leaves are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // refresh on focus so the "On Leave" / "Absent" sections stay accurate.
+  // isDataLoaded waits for that first read so no teammate flashes as absent.
+  const [leaves, setLeaves] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setLeaves(await loadLeaves());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
+
   const { logs } = useSelector((state) => state.attendance);
-  const { leaves } = useSelector((state) => state.leaves);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayStr);
@@ -196,6 +211,11 @@ export const TeamAttendanceScreen = ({ navigation }) => {
       </View>
     );
   };
+
+  // Wait for the first AsyncStorage read before rendering the day's sections.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>

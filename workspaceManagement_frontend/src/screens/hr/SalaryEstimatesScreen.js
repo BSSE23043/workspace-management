@@ -12,6 +12,7 @@ import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { loadLeaves } from '../../services/leaveService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
@@ -31,9 +32,23 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
     })();
   }, []);
 
+  // Leaves are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // refresh on focus so paid-leave days in every estimate stay accurate.
+  // isDataLoaded waits for that first read so no wrong totals flash meanwhile.
+  const [leaves, setLeaves] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setLeaves(await loadLeaves());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
+
   const salaryConfig = useSelector((state) => state.salary);
   const { logs } = useSelector((state) => state.attendance);
-  const { leaves } = useSelector((state) => state.leaves);
 
   const [selectedUserId, setSelectedUserId] = useState('');
   const [isCalculating, setIsCalculating] = useState(false);
@@ -241,6 +256,12 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
       </TouchableOpacity>
     );
   };
+
+  // Wait for the first AsyncStorage read so no estimate flashes without its
+  // paid-leave days.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>

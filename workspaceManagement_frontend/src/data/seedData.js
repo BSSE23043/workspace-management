@@ -33,7 +33,7 @@ export const SEED_COMPANY = {
 // Attendance logs, leave requests, tasks and client requirements now start
 // EMPTY and are built up at runtime by real users:
 //   - employees punch attendance (attendanceSlice.checkIn / checkOut)
-//   - employees submit leave (leavesSlice.applyLeave)
+//   - employees submit leave (services/leaveService.applyLeave)
 //   - managers create tasks (services/taskService.createTask)
 //   - managers create client requirements (services/requirementService.addRequirement)
 // This removes all pre-filled demo data associated with the demo manager.

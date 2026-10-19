@@ -2,10 +2,10 @@ import { configureStore } from '@reduxjs/toolkit';
 import companyReducer from './slices/companySlice';
 import attendanceReducer from './slices/attendanceSlice';
 import salaryReducer from './slices/salarySlice';
-import leavesReducer from './slices/leavesSlice';
-// NOTE: tasks, requirements & tickets were removed from Redux on purpose —
-// they are loaded from AsyncStorage on demand by services/taskService.js,
-// services/requirementService.js and services/ticketService.js instead
+// NOTE: tasks, requirements, tickets & leaves were removed from Redux on
+// purpose — they are loaded from AsyncStorage on demand by
+// services/taskService.js, services/requirementService.js,
+// services/ticketService.js and services/leaveService.js instead
 // (see those files for the details).
 
 export const store = configureStore({
@@ -13,7 +13,6 @@ export const store = configureStore({
     company: companyReducer,
     attendance: attendanceReducer,
     salary: salaryReducer,
-    leaves: leavesReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

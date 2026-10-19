@@ -10,6 +10,7 @@ import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { loadTasks } from '../../services/taskService';
+import { loadLeaves } from '../../services/leaveService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
@@ -23,13 +24,16 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const { logs } = useSelector((state) => state.attendance);
   const salaryConfig = useSelector((state) => state.salary);
 
-  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
-  // refresh on focus so the "today's task" card always shows the latest state.
+  // Tasks & leaves are NOT in Redux anymore — read them from AsyncStorage on
+  // mount and refresh on focus so the task card and the salary card always
+  // show the latest state.
   const [tasks, setTasks] = useState([]);
+  const [leaves, setLeaves] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const load = async () => {
       setTasks(await loadTasks());
+      setLeaves(await loadLeaves());
       setIsDataLoaded(true);
     };
     load();
@@ -51,7 +55,6 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
   ).length;
   // Own approved leave days this month (all leave is paid)
-  const { leaves } = useSelector((state) => state.leaves);
   const paidLeaveDays = leaves
     .filter(
       (l) =>
