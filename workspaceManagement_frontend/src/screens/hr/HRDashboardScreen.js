@@ -5,10 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { approveLeave, rejectLeave } from '../../store/slices/leavesSlice';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
@@ -19,6 +21,7 @@ export const HRDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
   const { currentUser } = useAuth();
+  const dispatch = useDispatch();
 
   const { logs } = useSelector((state) => state.attendance);
   const { leaves } = useSelector((state) => state.leaves);
@@ -82,6 +85,14 @@ export const HRDashboardScreen = ({ navigation }) => {
       ).length
     : 0;
   const openTickets = tickets.filter((t) => t.status === 'OPEN').length;
+  // Employee leave requests raised from the Employee app (HR's own excluded).
+  // Pending first so HR can action them, then already-decided ones below.
+  const employeeLeaves = leaves.filter((l) => l.userId !== currentUser?.id);
+  const sortedEmployeeLeaves = [
+    ...employeeLeaves.filter((l) => l.status === 'PENDING'),
+    ...employeeLeaves.filter((l) => l.status !== 'PENDING'),
+  ];
+  const pendingLeaveCount = employeeLeaves.filter((l) => l.status === 'PENDING').length;
   // Attendance corrections actually applied today (HR-corrected punch records)
   const correctionsToday = todaysLogs.filter(
     (l) => l.status === 'CORRECTED_PRESENT' || l.statusCategory === 'HR CORRECTED RECORDS'
@@ -121,6 +132,94 @@ export const HRDashboardScreen = ({ navigation }) => {
             <Text style={[styles.kpiValue, { color: '#D97706' }]}>{pad(correctionsToday)}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Corrections</Text>
           </View>
+        </View>
+
+        {/* Employee Leave Requests Card */}
+        <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardHeaderLeft}>
+              <Icon name="calendar" size={18} color={palette.primary} />
+              <Text style={[styles.cardHeading, { color: palette.textPrimary }]}>
+                Employee Leave Requests
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.badgePill,
+                { backgroundColor: pendingLeaveCount > 0 ? '#FEF3C7' : palette.badge },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.badgePillText,
+                  { color: pendingLeaveCount > 0 ? '#B45309' : palette.text },
+                ]}
+              >
+                {pendingLeaveCount} Pending
+              </Text>
+            </View>
+          </View>
+
+          {sortedEmployeeLeaves.length === 0 ? (
+            <Text style={[styles.cardBodyText, { color: palette.textSecondary }]}>
+              No leave requests received from employees yet.
+            </Text>
+          ) : (
+            sortedEmployeeLeaves.map((leave, idx) => (
+              <React.Fragment key={leave.id}>
+                {idx > 0 && <View style={[styles.feedDivider, { backgroundColor: palette.divider }]} />}
+                <View style={styles.leaveRow}>
+                  <View style={styles.leaveInfo}>
+                    <Text style={[styles.leaveName, { color: palette.textPrimary }]}>
+                      {leave.userName}
+                    </Text>
+                    <Text style={[styles.leaveMeta, { color: palette.textSecondary }]}>
+                      {leave.type} • {leave.startDate} → {leave.endDate} ({leave.daysCount}d)
+                    </Text>
+                  </View>
+
+                  {leave.status === 'PENDING' ? (
+                    <View style={styles.leaveActions}>
+                      <TouchableOpacity
+                        style={[styles.leaveApproveBtn, { backgroundColor: '#16A34A' }]}
+                        onPress={() => {
+                          dispatch(approveLeave({ leaveId: leave.id, comment: 'Approved by HR' }));
+                          Alert.alert('Leave Approved', `${leave.userName}'s leave request approved.`);
+                        }}
+                      >
+                        <Text style={styles.leaveBtnText}>Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.leaveRejectBtn}
+                        onPress={() => {
+                          dispatch(rejectLeave({ leaveId: leave.id, comment: 'Rejected by HR' }));
+                          Alert.alert('Leave Rejected', `${leave.userName}'s leave request rejected.`);
+                        }}
+                      >
+                        <Text style={styles.leaveRejectText}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.leaveStatusPill,
+                        { backgroundColor: leave.status === 'APPROVED' ? '#DCFCE7' : '#FEE2E2' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.leaveStatusText,
+                          { color: leave.status === 'APPROVED' ? '#16A34A' : '#DC2626' },
+                        ]}
+                      >
+                        {leave.status}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </React.Fragment>
+            ))
+          )}
         </View>
 
         {/* HR Support Tickets Card */}
@@ -305,6 +404,59 @@ const styles = StyleSheet.create({
   actionBtnOutlineText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  leaveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  leaveInfo: {
+    flex: 1,
+  },
+  leaveName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  leaveMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  leaveActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  leaveApproveBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  leaveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  leaveRejectBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  leaveRejectText: {
+    color: '#DC2626',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  leaveStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  leaveStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
   },
   policyRow: {
     flexDirection: 'row',

@@ -500,6 +500,23 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
     buttons gone entirely from `SalaryEstimatesScreen` (card now ends at the ESTIMATED NET
     PAYOUT box); dropped `cardActionsRow`/`lockBtn`/`lockBtnText`/`outlineBtn`/`outlineBtnText`
     styles. Grep-verified zero matches for both labels.
+  - **HR now receives employee leave requests** — `HRDashboardScreen` got an "Employee Leave
+    Requests" card (HR's own excluded): pending-first list with employee name, type, dates, days,
+    and inline **Approve / Reject** buttons dispatching `approveLeave`/`rejectLeave` (comment auto:
+    "Approved by HR" / "Rejected by HR"); decided requests show a status pill. Root cause: employee
+    `applyLeave` reached Redux, but HR had only an "Approved Leave" KPI and no listing (only Manager
+    had `TeamLeaveRequestsScreen`). Uses existing `useDispatch` + `leavesSlice` actions — no new
+    files or concepts.
+  - **Approved leave now overrides an existing ABSENT record in HR attendance.**
+    `CompanyAttendanceScreen.dateLogs` previously only checked approved leave when *synthesizing*
+    rows for users with no log; a **real** log with `status: 'ABSENT'` (written by
+    `attendanceSlice` when a punch fails the geofence) stayed ABSENT even after HR approved the
+    leave — which is why salary looked right while attendance did not. Fix: real records without a
+    verified punch (`PRESENT`/`CORRECTED_PRESENT`) are remapped to `ON_LEAVE` when
+    `isOnApprovedLeave(leaves, userId, selectedDate)` is true; inline synth check now uses the same
+    helper. Row detail line shows "Approved Leave — No Punch Required" (amber ON_LEAVE chip) for
+    both real and synthesized rows. Manager `TeamAttendanceScreen` already classified leave first —
+    no change needed.
 - **2026-10-19** — **Manager demo data removed; every manager screen now shows only the real team.**
   - `seedData.js`: `SEED_ATTENDANCE`, `SEED_LEAVES`, `SEED_TASKS`, `SEED_REQUIREMENTS` emptied to `[]`
     (the four were only read by the Redux slices' initial state; `storageService` first-run seed now

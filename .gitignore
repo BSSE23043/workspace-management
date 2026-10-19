@@ -23,4 +23,3 @@ Thumbs.db
 # caches
 .eslintcache
 *.tsbuildinfo
-workspaceManagement_frontend/android/app/build.gradle
