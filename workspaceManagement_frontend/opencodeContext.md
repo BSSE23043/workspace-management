@@ -127,7 +127,7 @@ src/
 ├── screens/                34 screens (see §6)
 ├── services/               storageService.js (AsyncStorage + seed/reset),
 │                           taskService.js + requirementService.js (load/save + mutations)
-├── store/                  index.js + slices/ (2 slices: company, theme — see §7)
+├── store/                  index.js + slices/ (1 slice: theme — see §7)
 └── utils/                  geofence.js, imagePicker.js, permissions.js, salaryCalculator.js, superAdminConfig.js, timeAgo.js, validation.js
 ```
 
@@ -245,20 +245,19 @@ account + the admin-set Company Profile name loaded from `@wms_company` in `comp
 
 ## 7. Redux Store
 
-`configureStore({ company, theme })` — **only two slices remain.**
-**State is in-memory only — NOT rehydrated from AsyncStorage**
-(only the auth session + company profile persist). All reducers synchronous. **No users slice** — the user list
-lives exclusively in AsyncStorage `@wms_users`; screens load it into local state.
-**No `tasks` / `requirements` / `tickets` / `leaves` / `attendance` / `salary` slices** — those datasets live
-in AsyncStorage (`@wms_tasks`, `@wms_requirements`, `@wms_tickets`, `@wms_leaves`, `@wms_attendance`,
-`@wms_salary_config`) and are read/written through the matching `services/*Service.js` (screens hold them in
-local `useState`, load on mount + focus).
+`configureStore({ theme })` — **only one slice remains.**
+**State is in-memory only — the theme flag resets on reload and is restored from `@wms_theme_preference` at
+boot** (`App.js` → `ThemeBootstrap`). All reducers synchronous.
+**No `users` / `company` / `tasks` / `requirements` / `tickets` / `leaves` / `attendance` / `salary` slices** —
+those datasets live in AsyncStorage (`@wms_users`, `@wms_company`, `@wms_tasks`, `@wms_requirements`,
+`@wms_tickets`, `@wms_leaves`, `@wms_attendance`, `@wms_salary_config`) and are read/written through the matching
+`services/*Service.js` (screens hold them in local `useState`, load on mount + focus).
 
 | Slice | State | Notable actions |
 |---|---|---|
-| company | flat company profile (geofence, policies) | updateCompanyProfile |
 | theme | `{ isDark }` | setDarkMode (restores saved theme at boot + persists every toggle to `@wms_theme_preference`) |
 
+~~`company`~~ slice **deleted** (moved to AsyncStorage `@wms_company` — see §8);
 ~~`announcements`~~ + ~~`notifications`~~ slices **deleted** (features removed);
 ~~`users`~~ slice deleted earlier; ~~`tasks`~~ + ~~`requirements`~~ + ~~`tickets`~~ + ~~`leaves`~~ +
 ~~`attendance`~~ + ~~`salary`~~ slices **deleted** (moved to AsyncStorage — see §8).
@@ -270,6 +269,10 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
   `initializeSeedDataIfNeeded()` (first-run seed via `@wms_app_initialized` + one-time demo-user
   purge via `@wms_demo_users_cleaned`); `resetToSeedData()` (multiSet of all domain data;
   now internal only — the Admin drawer reset button was removed).
+- **`companyService.js`** — the company profile is no longer in Redux. `loadCompanyProfile()` (saved
+  `@wms_company` overlaid on `SEED_COMPANY` so the shape is always complete) / `saveCompanyProfile(payload)`
+  (read → merge → write → return). Used by `AdminDashboardScreen` (org card) and `CompanyProfileScreen`
+  (form load + save); the client `ProfileSettingsScreen` still reads `@wms_company` directly.
 - **`taskService.js`** — tasks no longer in Redux. `loadTasks()` / `saveTasks()` over
   `@wms_tasks`; mutations `createTask` (computes bufferDays/hasConflict), `editTask`,
   `updateTaskStatus`, `toggleMilestoneSync`, `addTaskLog`. Each mutation does
@@ -312,9 +315,9 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
 
 ## 10. Known Caveats / Tech Debt
 
-- No backend; the Redux store (company + theme) resets on app reload (auth session persists; users persist in
-  AsyncStorage and are loaded into local state by each screen; tasks/requirements/tickets/leaves/attendance/
-  salary persist in AsyncStorage and survive reloads — they are the data a reload used to destroy).
+- No backend; the Redux theme flag resets on app reload (restored from `@wms_theme_preference` at boot; the
+  auth session, users, company profile, tasks/requirements/tickets/leaves/attendance/salary all persist in
+  AsyncStorage and survive reloads).
 - Plaintext passwords in AsyncStorage; Super Admin credentials hardcoded in `superAdminConfig.js` (fine for a course project).
 - Removing a Company Admin only removes them from AsyncStorage USERS (an already-open session of theirs would persist until logout).
 - All image assets are 1x1-px placeholder stubs (blueprint lists required real images).
@@ -336,6 +339,18 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
 
 ## Changelog (append every change/pull/merge on `Umar`)
 
+- **2026-10-19** — **`company` removed from Redux; the company profile now lives in AsyncStorage.**
+  - New `services/companyService.js` (`loadCompanyProfile` / `saveCompanyProfile`, read → merge → write →
+    return). `store/index.js` is now **`theme` only** and `store/slices/companySlice.js` is **deleted**.
+  - `AuthContext` no longer hydrates the profile into Redux on boot (that `dispatch(updateCompanyProfile(...))`
+    block and the now-unused `useDispatch` import were removed) — AsyncStorage is the single source of truth.
+  - `AdminDashboardScreen`: reads the org card from local state via `loadCompanyProfile()` on mount + focus
+    (dropped `useSelector`). `CompanyProfileScreen`: seeds its form with `loadCompanyProfile()` on mount and
+    saves with `await saveCompanyProfile(payload)` (dropped `useDispatch`/`useSelector`/`storageService`).
+  - Unchanged: client `ProfileSettingsScreen` already read `@wms_company` directly; `SEED_COMPANY` + the
+    `@wms_company` seed key are untouched.
+  - Verified: no `state.company` / `companySlice` / `updateCompanyProfile` references remain; Babel walk
+    **TOTAL FILES 70, FAILURES 0**; Metro bundle writes successfully.
 - **2026-10-19** — **Theme moved out of `ThemeContext` into Redux; `ThemeContext` deleted.**
   - New `store/slices/themeSlice.js` holds `{ isDark }` with a `setDarkMode` action; `store/index.js` is
     now `company` + `theme` (2 slices).

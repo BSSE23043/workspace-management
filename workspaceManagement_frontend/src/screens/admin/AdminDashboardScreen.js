@@ -7,10 +7,10 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { loadCompanyProfile } from '../../services/companyService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
@@ -21,7 +21,9 @@ export const AdminDashboardScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
   const palette = getRolePalette('ADMIN');
 
-  const company = useSelector((state) => state.company);
+  // Company profile lives in AsyncStorage now (it was removed from Redux) —
+  // it is loaded below on mount + focus, exactly like the user list.
+  const [company, setCompany] = useState({});
 
   // The real user list lives in AsyncStorage (users this admin has added +
   // company admins created by the Super Admin).
@@ -38,12 +40,20 @@ export const AdminDashboardScreen = ({ navigation }) => {
     setUsers(scopedUsers);
   };
 
+  const loadCompanyFromStorage = async () => {
+    setCompany(await loadCompanyProfile());
+  };
+
   // Load once when the screen mounts, and reload every time this screen
   // gains focus again (e.g. after coming back from the Employee Form
-  // screen where a new user was added).
+  // screen where a new user was added, or from Company Profile after a save).
   useEffect(() => {
-    loadUsersFromStorage();
-    const unsubscribe = navigation.addListener('focus', loadUsersFromStorage);
+    const loadDashboardData = () => {
+      loadUsersFromStorage();
+      loadCompanyFromStorage();
+    };
+    loadDashboardData();
+    const unsubscribe = navigation.addListener('focus', loadDashboardData);
     // Clean up the focus listener when the screen unmounts
     return unsubscribe;
   }, []);

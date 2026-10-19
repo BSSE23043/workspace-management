@@ -1,6 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
-import { updateCompanyProfile } from '../store/slices/companySlice';
 import storageService, { STORAGE_KEYS } from '../services/storageService';
 import { isValidEmail, isValidPassword } from '../utils/validation';
 // Hardcoded Super Admin account (platform owner) — see superAdminConfig.js
@@ -13,7 +11,6 @@ import {
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const dispatch = useDispatch();
   const [currentUser, setCurrentUser] = useState(null);
   const [isSplashLoading, setIsSplashLoading] = useState(true);
 
@@ -23,13 +20,6 @@ export const AuthProvider = ({ children }) => {
     (async () => {
       try {
         await storageService.initializeSeedDataIfNeeded();
-        // Load the saved company profile into Redux — the company slice is
-        // in-memory only, so without this the profile resets to the seed on
-        // every reload. Same AsyncStorage-as-source-of-truth pattern as users.
-        const storedCompany = await storageService.getItem(STORAGE_KEYS.COMPANY, null);
-        if (isMounted && storedCompany) {
-          dispatch(updateCompanyProfile(storedCompany));
-        }
         const savedUser = await storageService.getItem(STORAGE_KEYS.AUTH_CURRENT_USER, null);
         if (isMounted) {
           // If no session exists, default to Admin or null
