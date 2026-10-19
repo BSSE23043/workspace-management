@@ -10,10 +10,11 @@ import {
   Alert,
 } from 'react-native';
 import AuthContext from '../../context/AuthContext';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
-import { getAvatarSource, IMAGES } from '../../assets/images';
+import { getAvatarSource } from '../../assets/images';
 import { pickProfilePictureFromGallery } from '../../utils/imagePicker';
 
 // Syllabus Requirement: ES6 Class Component with constructor, this.state, this.setState
@@ -24,15 +25,28 @@ export class ProfileSettingsScreen extends React.Component {
 
   constructor(props) {
     super(props);
+    // Only real app state lives here. Every demo value that used to be hardcoded
+    // (Zafar Ahmed / Zafar Corp / a fake phone / "Enterprise Partner" tier) has
+    // been removed: the client's own details now come from the account the
+    // Company Admin provisioned, and the organization name comes from the
+    // Company Profile the admin saved (loaded below from AsyncStorage).
     this.state = {
       isDarkMode: false,
-      clientEmail: 'zafar@zafarcorp.com',
-      clientPhone: '+92 300 8899112',
-      orgName: 'Zafar Corp',
-      representative: 'Zafar Ahmed',
-      tier: 'Enterprise Partner',
+      orgName: '',
     };
   }
+
+  componentDidMount() {
+    this.loadCompanyProfile();
+  }
+
+  // Reads the organization name the Company Admin typed on the Admin "Company
+  // Profile" screen (persisted as @wms_company). It stays empty until the admin
+  // configures it, and the screen shows "—" in that case.
+  loadCompanyProfile = async () => {
+    const company = await storageService.getItem(STORAGE_KEYS.COMPANY, {});
+    this.setState({ orgName: company?.name || '' });
+  };
 
   handleToggleDarkMode = () => {
     this.setState((prevState) => ({
@@ -52,7 +66,8 @@ export class ProfileSettingsScreen extends React.Component {
   };
 
   handleSignOut = () => {
-    Alert.alert('Sign Out', 'Sign out of Zafar Corp partner portal?', [
+    const { orgName } = this.state;
+    Alert.alert('Sign Out', `Sign out of ${orgName || 'the partner portal'}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign Out',
@@ -69,7 +84,7 @@ export class ProfileSettingsScreen extends React.Component {
   render() {
     const { navigation } = this.props;
     const { currentUser } = this.context;
-    const { isDarkMode, clientEmail, clientPhone, orgName, representative, tier } = this.state;
+    const { isDarkMode, orgName } = this.state;
 
     return (
       <View style={styles.container}>
@@ -93,7 +108,7 @@ export class ProfileSettingsScreen extends React.Component {
           <View style={styles.avatarCard}>
             <View style={styles.avatarWrap}>
               <Image
-                source={getAvatarSource(currentUser?.avatarKey || currentUser?.avatarCustomUri || IMAGES.dpClientZafar)}
+                source={getAvatarSource(currentUser?.avatarKey || currentUser?.avatarCustomUri)}
                 style={styles.avatarImg}
               />
               <TouchableOpacity
@@ -104,11 +119,10 @@ export class ProfileSettingsScreen extends React.Component {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.userName}>{representative}</Text>
-            <View style={styles.tierTag}>
-              <Text style={styles.tierTagText}>{tier}</Text>
-            </View>
-            <Text style={styles.userOrg}>{orgName}</Text>
+            <Text style={styles.userName}>{currentUser?.name || '—'}</Text>
+            {/* The fake "Enterprise Partner" tier tag was removed: the system
+                has no tier field for a client account. */}
+            <Text style={styles.userOrg}>{orgName || '—'}</Text>
           </View>
 
           {/* Locked Read-Only Client Details */}
@@ -123,31 +137,25 @@ export class ProfileSettingsScreen extends React.Component {
 
             <AppInput
               label="Organization Name"
-              value={orgName}
+              value={orgName || '—'}
               editable={false}
             />
 
             <AppInput
               label="Client Representative"
-              value={representative}
+              value={currentUser?.name || '—'}
               editable={false}
             />
 
             <AppInput
               label="Work Email"
-              value={currentUser?.email || clientEmail}
+              value={currentUser?.email || '—'}
               editable={false}
             />
 
             <AppInput
               label="Phone Contact"
-              value={currentUser?.phone || clientPhone}
-              editable={false}
-            />
-
-            <AppInput
-              label="Account Tier"
-              value={currentUser?.tier || tier}
+              value={currentUser?.phone || '—'}
               editable={false}
             />
           </View>
@@ -242,19 +250,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
-  },
-  tierTag: {
-    backgroundColor: '#92400E',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  tierTagText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
   },
   userOrg: {
     fontSize: 12,

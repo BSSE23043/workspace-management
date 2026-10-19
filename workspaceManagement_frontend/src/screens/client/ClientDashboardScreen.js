@@ -36,6 +36,22 @@ export const ClientDashboardScreen = ({ navigation }) => {
   // when it is created), so this client only ever sees its own deliverables.
   const clientRequirements = requirements.filter((r) => r.clientId === currentUser?.id);
 
+  // Real numbers for the KPI grid — nothing is hardcoded. Each requirement
+  // carries a lifecycleState that the manager moves along
+  // (IN_PROGRESS / AWAITING_CLIENT / COMPLETED), so the tiles simply tally
+  // this client's own requirements. A fresh client with no requirements
+  // honestly sees four zeros.
+  const totalReqs = clientRequirements.length;
+  const inProgressCount = clientRequirements.filter(
+    (r) => r.lifecycleState === 'IN_PROGRESS'
+  ).length;
+  const awaitingClientCount = clientRequirements.filter(
+    (r) => r.lifecycleState === 'AWAITING_CLIENT'
+  ).length;
+  const completedCount = clientRequirements.filter(
+    (r) => r.lifecycleState === 'COMPLETED'
+  ).length;
+
   // Wait for the first AsyncStorage read so the KPIs don't flash while real
   // deliverables are still loading.
   if (!isDataLoaded) {
@@ -48,8 +64,7 @@ export const ClientDashboardScreen = ({ navigation }) => {
         title="Client Executive Dashboard"
         subtitle={currentUser?.name || 'Client Portal'}
         navigation={navigation}
-        statusText="PARTNER TIER"
-        statusColor="#92400E"
+        showStatus={false}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -63,28 +78,29 @@ export const ClientDashboardScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        {/* 2x2 Deliverable Counter Grid */}
+        {/* 2x2 Deliverable Counter Grid — all values derived from the client's
+            own requirements in AsyncStorage (previously hardcoded demo numbers) */}
         <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>
           Contract Deliverables Status
         </Text>
         <View style={styles.kpiGrid}>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiVal, { color: '#92400E' }]}>1</Text>
-            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Submitted</Text>
+            <Text style={[styles.kpiVal, { color: '#92400E' }]}>{totalReqs}</Text>
+            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Total Requirements</Text>
           </View>
 
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiVal, { color: '#1D4ED8' }]}>2</Text>
+            <Text style={[styles.kpiVal, { color: '#1D4ED8' }]}>{inProgressCount}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>In Progress</Text>
           </View>
 
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiVal, { color: '#D97706' }]}>1</Text>
-            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Attention Required</Text>
+            <Text style={[styles.kpiVal, { color: '#D97706' }]}>{awaitingClientCount}</Text>
+            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Awaiting Client</Text>
           </View>
 
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiVal, { color: '#16A34A' }]}>4</Text>
+            <Text style={[styles.kpiVal, { color: '#16A34A' }]}>{completedCount}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Completed</Text>
           </View>
         </View>

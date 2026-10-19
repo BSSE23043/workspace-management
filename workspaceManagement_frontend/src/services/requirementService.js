@@ -81,14 +81,9 @@ export const addRequirement = async (payload) => {
     progressPercent: 0,
     milestones,
     privateLinkedTasks: [],
-    broadcasts: [
-      {
-        id: `bc_${Date.now()}`,
-        time: 'Just now',
-        author: 'Engineering Management',
-        content: `Requirement created and scoped for ${organization}. Deliverables scheduled for ${contractDeadline}.`,
-      },
-    ],
+    // No automatic broadcast on creation — the client's "Official Broadcasts"
+    // section only ever shows updates a manager deliberately publishes.
+    broadcasts: [],
     clarificationReplies: [],
   });
 
@@ -175,12 +170,25 @@ export const addClientClarificationReply = async (payload) => {
     req.clarificationReplies.unshift({
       id: `cr_${Date.now()}`,
       time: 'Just now',
+      // Timestamp so the manager screen can show the same "time ago" label
+      // broadcasts already use (replies used to be saved without one).
+      createdAt: Date.now(),
       author: author || 'Client Representative',
       content,
     });
   }
 
   return saveRequirements(requirements);
+};
+
+// Delete a requirement entirely (manager minus button). Because the client app
+// reads this same list from AsyncStorage, the requirement (with its milestones,
+// broadcasts and replies) also disappears from the client's dashboard as soon
+// as that screen reloads on focus.
+export const removeRequirement = async (payload) => {
+  const { reqId } = payload;
+  const requirements = await loadRequirements();
+  return saveRequirements(requirements.filter((r) => r.id !== reqId));
 };
 
 // Manager moves the requirement along its lifecycle (chips on the screen).
@@ -195,3 +203,5 @@ export const updateLifecycleState = async (payload) => {
 
   return saveRequirements(requirements);
 };
+
+

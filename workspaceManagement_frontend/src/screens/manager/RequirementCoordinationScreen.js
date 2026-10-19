@@ -17,6 +17,7 @@ import {
   toggleMilestone,
   addMilestone,
   removeMilestone,
+  removeRequirement,
   publishBroadcast,
   updateLifecycleState,
 } from '../../services/requirementService';
@@ -24,23 +25,11 @@ import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
 import DatePickerModal from '../../components/common/DatePickerModal';
+// Shared "time ago" label so broadcasts and client replies always show their
+// real age instead of a hardcoded "Just now".
+import { timeAgo } from '../../utils/timeAgo';
 
 const LIFECYCLE_STATES = ['IN_PROGRESS', 'AWAITING_CLIENT', 'COMPLETED'];
-
-// Turns a broadcast's publish timestamp into a short "time ago" label so the
-// manager can see when each of his broadcasts went out.
-const timeAgo = (createdAt) => {
-  if (!createdAt) return 'Just now';
-  const minutes = Math.floor((Date.now() - createdAt) / 60000);
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const posted = new Date(createdAt);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const minutePad = posted.getMinutes() < 10 ? `0${posted.getMinutes()}` : `${posted.getMinutes()}`;
-  return `${posted.getDate()} ${months[posted.getMonth()]}, ${posted.getHours()}:${minutePad}`;
-};
 
 export const RequirementCoordinationScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
@@ -158,6 +147,30 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
               milestoneId: milestone.id,
             });
             setRequirements(nextReqs);
+          },
+        },
+      ]
+    );
+  };
+
+  // Minus button on the requirement header: ask first (reusing the milestone
+  // minus button), then delete the whole requirement. The client app reads the
+  // same AsyncStorage list, so it drops off the client dashboard too.
+  const handleRemoveRequirement = () => {
+    if (!activeReq?.id) return;
+    Alert.alert(
+      'Remove Requirement',
+      `Remove ${activeReq.code} (${activeReq.title})? Its milestones, broadcasts and client replies will be deleted, and it will disappear from the client's dashboard.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const nextReqs = await removeRequirement({ reqId: activeReq.id });
+            setRequirements(nextReqs);
+            // The deleted one can no longer be the selected requirement.
+            setSelectedReqId(null);
           },
         },
       ]
@@ -385,13 +398,26 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
             {/* Active Requirement Card */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <View style={styles.reqTopRow}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={[styles.reqCode, { color: palette.primary }]}>{activeReq.code}</Text>
               <Text style={[styles.reqTitle, { color: palette.textPrimary }]}>{activeReq.title}</Text>
               <Text style={[styles.orgText, { color: palette.textSecondary }]}>
-                Client: {activeReq.organization} ({activeReq.clientRepresentative})
+                Client: {activeReq.organization}
               </Text>
             </View>
+            {/* Minus button — deletes this requirement (and therefore removes it
+                from the client's dashboard, which reads the same storage). */}
+            <TouchableOpacity
+              style={[
+                styles.minusBtn,
+                { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder },
+              ]}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={handleRemoveRequirement}
+            >
+              <Text style={styles.minusBtnText}>-</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Lifecycle State Picker */}
@@ -470,14 +496,14 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                 {/* Minus button — removes this milestone from the requirement */}
                 <TouchableOpacity
                   style={[
-                    styles.removeMilestoneBtn,
+                    styles.minusBtn,
                     { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder },
                   ]}
                   activeOpacity={0.7}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   onPress={() => handleRemoveMilestone(m)}
                 >
-                  <Text style={styles.removeMilestoneBtnText}>-</Text>
+                  <Text style={styles.minusBtnText}>-</Text>
                 </TouchableOpacity>
               </TouchableOpacity>
             ))}
@@ -501,29 +527,6 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Privacy Enforced Scope (Private Tasks Card) */}
-        <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
-            Privacy Enforced Scope (Internal Tasks Hidden from Client)
-          </Text>
-          <Text style={[styles.privacyDesc, { color: palette.textSecondary }]}>
-            Clients only see overall milestones and official broadcasts. Internal task assignments, slack buffers and logs remain strictly confidential.
-          </Text>
-          <View style={styles.privateTaskChipsRow}>
-            {(activeReq?.privateLinkedTasks || []).map((tid) => (
-              <View key={tid} style={styles.privateTaskChip}>
-                <Icon name="lock-closed" size={12} color="#DC2626" />
-                <Text style={styles.privateTaskText}>🔒 {tid}</Text>
-              </View>
-            ))}
-            {(!activeReq?.privateLinkedTasks || activeReq.privateLinkedTasks.length === 0) && (
-              <Text style={[styles.privacyDesc, { color: palette.textSecondary }]}>
-                No internal tasks linked to this requirement yet.
-              </Text>
-            )}
-          </View>
-        </View>
-
         {/* Publish Client-Visible Progress Update Broadcast */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
@@ -540,6 +543,9 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
           <View style={styles.broadcastTargetChips}>
             {requirements.map((req) => {
               const isTarget = req.id === targetReq.id;
+              // How many messages the client sent on this requirement, so the
+              // manager can spot a reply even while another chip is selected.
+              const clientReplyCount = (req.clarificationReplies || []).length;
               return (
                 <TouchableOpacity
                   key={req.id}
@@ -555,6 +561,9 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                   </Text>
                   <Text style={[styles.targetChipSub, { color: palette.textSecondary }]}>
                     {req.code}
+                    {clientReplyCount > 0
+                      ? ` • ${clientReplyCount} client ${clientReplyCount === 1 ? 'reply' : 'replies'}`
+                      : ''}
                   </Text>
                 </TouchableOpacity>
               );
@@ -611,6 +620,45 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                 </View>
                 <Text style={[styles.broadcastHistoryContent, { color: palette.textPrimary }]}>
                   {b.content}
+                </Text>
+              </View>
+            ))
+          )}
+
+          {/* Client's own messages. The client app saves them into
+              clarificationReplies (addClientClarificationReply) when the client
+              replies from their requirement dashboard — without this list the
+              conversation was one-way and the manager never saw them. */}
+          <Text style={[styles.fieldLabel, { color: palette.textPrimary, marginTop: 14 }]}>
+            Client Replies ({targetReq.code})
+          </Text>
+          {(targetReq.clarificationReplies || []).length === 0 ? (
+            <Text style={[styles.broadcastHistoryEmpty, { color: palette.textSecondary }]}>
+              No messages from {targetReq.organization} yet. Replies the client sends from their
+              requirement dashboard will show up here.
+            </Text>
+          ) : (
+            (targetReq.clarificationReplies || []).map((cr) => (
+              <View
+                key={cr.id}
+                style={[
+                  styles.broadcastHistoryItem,
+                  { backgroundColor: palette.badge, borderColor: palette.primary },
+                ]}
+              >
+                <View style={styles.broadcastHistoryHeader}>
+                  <Text
+                    style={[styles.broadcastHistoryAuthor, { color: palette.primary }]}
+                    numberOfLines={1}
+                  >
+                    {cr.author || 'Client Representative'}
+                  </Text>
+                  <Text style={[styles.broadcastHistoryTime, { color: palette.textSecondary }]}>
+                    {timeAgo(cr.createdAt)}
+                  </Text>
+                </View>
+                <Text style={[styles.broadcastHistoryContent, { color: palette.textPrimary }]}>
+                  {cr.content}
                 </Text>
               </View>
             ))
@@ -677,6 +725,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   reqTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
     marginBottom: 8,
   },
   reqCode: {
@@ -758,7 +810,9 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     color: '#94A3B8',
   },
-  removeMilestoneBtn: {
+  // Shared circular minus button — used to remove a milestone row and to
+  // remove the whole requirement from the active requirement header.
+  minusBtn: {
     width: 24,
     height: 24,
     borderRadius: 12,
@@ -766,7 +820,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  removeMilestoneBtnText: {
+  minusBtnText: {
     fontSize: 16,
     lineHeight: 17,
     fontWeight: '900',
@@ -803,25 +857,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     marginBottom: 10,
-  },
-  privateTaskChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  privateTaskChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    gap: 6,
-  },
-  privateTaskText: {
-    fontSize: 11,
-    color: '#DC2626',
-    fontWeight: '600',
   },
   broadcastInput: {
     borderWidth: 1,

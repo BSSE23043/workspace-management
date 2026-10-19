@@ -106,6 +106,9 @@ repo/                                  (git root; branches: main, Samer, Umar[cu
   `net = base − (unexcused × rateAbsent + unpaidLeave × rateUnpaid) + allowances`; W=22, 5000/3500 PKR rates; currency PKR.
 - **Dual-deadline conflict** (`src/services/taskService.js`): tasks carry internal engineer due vs external client due;
   `bufferDays`, `hasConflict` computed at `createTask`.
+- **Broadcast / reply timestamps** (`src/utils/timeAgo.js`): `timeAgo(createdAt)` → `Just now` / `12m ago` /
+  `3h ago` / `18 Oct, 14:32`; returns `''` when an entry has no `createdAt` (older entries) so no false
+  "Just now" is shown. Manager + client requirement screens both use it.
 
 ## 5. Source Map (`src/`)
 
@@ -124,7 +127,7 @@ src/
 ├── services/               storageService.js (AsyncStorage + seed/reset),
 │                           taskService.js + requirementService.js (load/save + mutations)
 ├── store/                  index.js + slices/ (5 slices, see §7)
-└── utils/                  geofence.js, imagePicker.js, permissions.js, salaryCalculator.js, superAdminConfig.js, validation.js
+└── utils/                  geofence.js, imagePicker.js, permissions.js, salaryCalculator.js, superAdminConfig.js, timeAgo.js, validation.js
 ```
 
 ### Super Admin account (`src/utils/superAdminConfig.js`)
@@ -211,10 +214,12 @@ guarded by an empty state, **Client Organization dropdown** — the Company Admi
 this manager's company, read from AsyncStorage, with loading/no-clients notes and a required selection
 that stamps `organization` + `clientId` + `clientEmail`/`clientRepresentative` onto the requirement,
 milestones (add row + **minus button per milestone with a confirm dialog → `removeMilestone`**,
-progress recalculated), lifecycle state, private-task links
-from the selected requirement, client broadcasts authored by the current user **plus a
+progress recalculated), lifecycle state, client broadcasts authored by the current user **plus a
 "Published Broadcasts" history right under the publish button** — shows each broadcast's author
-(`b.author`) and a `timeAgo(b.createdAt)` label, with an empty note before the first publish),
+(`b.author`) and a `timeAgo(b.createdAt)` label, with an empty note before the first publish;
+**plus a "Client Replies" list for the selected requirement** (`clarificationReplies` written by the
+client app) with author + `timeAgo(cr.createdAt)` and an empty note, and each target chip's sub-label
+shows the requirement's client-reply count so a reply is spotted even when another chip is selected),
 `ManagerProfileScreen` (read-only + DP upload; no stats/pulse card).
 
 **employee/** — `EmployeeDashboardScreen` (attendance card w/ geofence distance, salary estimate),
@@ -229,9 +234,12 @@ types, date range, overlap validation), `MyHRTicketsScreen` (3 categories, corre
 so a client only ever sees requirements created against its own account, and render an empty-state
 card when there are none; headers use `currentUser.name`. `ClientDashboardScreen` (deliverable KPIs, no
 submit button), `MyRequirementsScreen` (milestone checklist read-only + clarification replies,
-author = `currentUser.name`), `ProfileSettingsScreen` (**class component**
+author = `currentUser.name`; `selectedReqId` state lets the client tap any "Other Requirements"
+card to feature it — falls back to the first requirement; management broadcasts and the client's own
+replies both show a `timeAgo(...)` label via `src/utils/timeAgo.js`), `ProfileSettingsScreen` (**class component**
 reading `currentUser` from AuthContext via `static contextType`; DP updates go through
-`updateCurrentUser` → session + AsyncStorage).
+`updateCurrentUser` → session + AsyncStorage; all displayed details come from the provisioned
+account + the admin-set Company Profile name loaded from `@wms_company` in `componentDidMount`).
 
 ## 7. Redux Store
 
@@ -326,6 +334,101 @@ lives exclusively in AsyncStorage `@wms_users`; screens load it into local state
 
 ## Changelog (append every change/pull/merge on `Umar`)
 
+- **2026-10-19** — **Removed the dead "Privacy Enforced Scope" card from the manager requirement screen.**
+  - Note: this was not a requirement in the list — it was a static card. It only ever rendered
+    `activeReq.privateLinkedTasks`, a field that is initialised to `[]` in `addRequirement` and **never
+    written anywhere** (no "link an internal task to a requirement" feature exists), so it permanently
+    showed the placeholder "No internal tasks linked to this requirement yet." — demo content.
+  - Removed the card block and its now-unused `privateTaskChipsRow` / `privateTaskChip` /
+    `privateTaskText` styles from `RequirementCoordinationScreen.js`. The `privateLinkedTasks: []`
+    field stays on the requirement model (harmless, keeps stored data compatible); nothing else read
+    or rendered it. `privacyDesc` is kept — the broadcast card and empty-state still use it.
+  - All 65 src files parse clean.
+- **2026-10-19** — **Manager can remove a requirement (it disappears for the client too).**
+  - Added `removeRequirement({ reqId })` to `src/services/requirementService.js` (filters and persists
+    the list). `RequirementCoordinationScreen` now shows a circular minus button at the top-right of
+    the active requirement card; clicking it opens an `Alert.alert` confirmation ("Remove {code} …
+    Milestones, broadcasts and client replies will be deleted, and it will disappear from the client's
+    dashboard"), calls `removeRequirement`, refreshes the list and clears the selected requirement.
+    The header now uses `flexDirection: 'row', alignItems: 'flex-start'` with `flex: 1` on the text
+    column; milestones reuse the same `minusBtn` style. Clients read from the same `@wms_requirements`
+    storage, so the change propagates on their next focus.
+- **2026-10-19** — **No automatic broadcast when a manager creates a requirement.**
+  - Bug: `addRequirement` seeded every new requirement with an auto broadcast authored by
+    "Engineering Management" ("Requirement created and scoped for …"), so the client's "Official
+    Broadcasts" list always had an entry the manager never wrote.
+  - Fix: `addRequirement` now stores `broadcasts: []` — only `publishBroadcast` ever adds broadcasts.
+    Because that list can now genuinely be empty, the client screen shows a small empty note
+    (`broadcastEmpty` style) like the manager's "Nothing published yet." one. No other logic changed;
+    all 65 src files parse clean.
+- **2026-10-19** — **Broadcasts and replies now show their real age (no more hardcoded "Just now").**
+  - Bug: the client's requirement screen rendered the stored static string `{b.time}` ('Just now') for
+    every broadcast, so even messages sent hours/days ago said "Just now", and the client's own
+    messages showed no time at all. The manager's side relied on `cr.createdAt`, which replies saved
+    before the previous fix did not have, so they also read as "Just now".
+  - Fix: extracted the manager screen's helper into **`src/utils/timeAgo.js`** (`timeAgo(createdAt)` —
+  the single implementation both sides now import); the client list renders `timeAgo(b.createdAt)` for
+  management broadcasts and a new `timeAgo(cr.createdAt)` label on each of its own replies (new
+  `replyHeaderRow` / `replyTime` styles); the manager screen imports the shared helper (local copy
+  removed). `timeAgo` returns `''` when an entry has no timestamp, so legacy entries show no label
+  instead of a wrong "Just now". `addRequirement`'s auto-created creation note now also stamps
+  `createdAt` (it never had one, which is why it read "Just now" forever).
+  - `ClientDashboardScreen`'s broadcast cards show no timestamp at all (unchanged, out of scope).
+  - No new dependency; `src/utils/` files are the established pattern. All 65 src files parse clean.
+- **2026-10-19** — **Client messages now visible to the manager on a requirement.**
+  - Bug: the client's "Reply to Management Clarification" messages were saved correctly
+    (`addClientClarificationReply` → `req.clarificationReplies`) but `RequirementCoordinationScreen`
+    only ever rendered `targetReq.broadcasts`, so the conversation was one-way — manager → client
+    showed up, client → manager vanished (data was there, nothing displayed it).
+  - Fix: added a **"Client Replies ({code})"** list inside the same card as the broadcast history,
+    rendering `targetReq.clarificationReplies` with the client's name, `timeAgo(cr.createdAt)` and the
+    message body, plus an empty note; each target-client chip now shows its requirement's reply count
+    (`{code} • 2 client replies`) so the manager can spot a reply even when another chip is selected.
+    `addClientClarificationReply` now also stamps `createdAt: Date.now()` (same as `publishBroadcast`)
+    so the time-ago label is real; the screen already reloads from AsyncStorage on focus.
+  - No new concept/dependency (reused existing card/item styles + nested ternaries). Both files parse clean.
+- **2026-10-19** — **Client can now open any requirement from "Other Requirements & Modules".**
+  - Bug: in `MyRequirementsScreen` the "other" cards were plain `<View>`s (no `onPress`) and the
+    details card was hardwired to `clientRequirements[0]`, so tapping another requirement did
+    nothing — only the first (or latest) requirement ever displayed.
+  - Fix: added `selectedReqId` state (same pattern as the manager's `RequirementCoordinationScreen`),
+    `featuredReq = clientRequirements.find(r => r.id === selectedReqId) || clientRequirements[0]`
+    (resource-safe fallback when a selected requirement disappears), and turned each "other" card
+    into a `TouchableOpacity` calling `handleSelectRequirement(req.id)`. The card list updates
+    automatically (`otherReqs` excludes whatever is featured), the previously featured requirement
+    drops back into the list, and the `ScrollView` (now with a `useRef`) scrolls to the top so the
+    switched requirement's milestones/broadcasts/reply box are visible immediately. A small
+    "Tap to view details →" hint was added to the cards. Clarification replies follow the selected
+    requirement (`handleSendClarification` already used `featuredReq`).
+  - No new concept/dependency (`useState` + `useRef` + `TouchableOpacity` + template-free ternaries).
+    File parses clean.
+- **2026-10-19** — **Client profile now shows the real client account + admin-set organization (demo persona removed).**
+  - Every client saw the same hardcoded persona: `ProfileSettingsScreen`'s local state seeded
+    `representative: 'Zafar Ahmed'`, `orgName: 'Zafar Corp'`, `clientEmail: 'zafar@zafarcorp.com'`,
+    `clientPhone: '+92 300 8899112'`, `tier: 'Enterprise Partner'`, and the avatar fell back to
+    `IMAGES.dpClientZafar`. None of it existed on the client's actual user record.
+  - `ProfileSettingsScreen` (class component) now reads its data from the two real sources:
+    the account the Company Admin provisioned via `EmployeeFormScreen` (`currentUser.name` /
+    `currentUser.email` / `currentUser.phone`, shown as `—` when empty) and the **Company Profile**
+    name the admin saved on the Admin screen (`@wms_company`), read in `componentDidMount` into
+    `state.orgName` (stack screen → fresh mount each visit). Demo state fields deleted.
+  - Removed the fake "Enterprise Partner" tier tag **and** the "Account Tier" read-only row (the
+    system has no tier field); `handleSignOut` alert now says `Sign out of {orgName}?`, and the
+    avatar fallback now uses the shared `getAvatarSource` default instead of the "Zafar" demo DP
+    (registry entry `dpClientZafar` left in place). Nothing else changed; file parses clean.
+- **2026-10-19** — **Removed the fake "PARTNER TIER" badge from the Client dashboard.**
+  - `ClientDashboardScreen` HeaderBar: dropped `statusText="PARTNER TIER"` / `statusColor` and set
+    `showStatus={false}` (dropping the text alone would show HeaderBar's default pill `ONLINE`).
+    Only screen that had that label; file parses clean.
+- **2026-10-19** — **Client dashboard "Contract Deliverables Status" tiles are now real numbers.**
+  - The four KPI tiles were hardcoded demo values (`1 Submitted / 2 In Progress / 1 Attention
+    Required / 4 Completed`) that never changed — "Submitted" wasn't even a state the data model has.
+  - `ClientDashboardScreen` now derives them from `clientRequirements` (the client-scoped list
+    already loaded from AsyncStorage): **Total Requirements** = `length`; **In Progress** /
+    **Awaiting Client** / **Completed** = counts of `lifecycleState` `'IN_PROGRESS'` /
+    `'AWAITING_CLIENT'` / `'COMPLETED'` (the three states the manager cycles through via
+    `requirementService.updateLifecycleState`). A client with no requirements sees four honest zeros.
+  - Layout, colors, labels style and everything else on the screen untouched. File parses clean.
 - **2026-10-19** — **Removed the "Leave Review & Approvals" navigation row from the Manager dashboard.**
   - `ManagerDashboardScreen` "Management Controls" list is now 3 rows (Assigned Team Attendance,
     Team Task Board & Dual Deadlines, Client Requirement Sync); the leave-approval row was a
