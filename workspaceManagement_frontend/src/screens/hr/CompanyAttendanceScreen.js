@@ -8,7 +8,6 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
@@ -16,6 +15,7 @@ import Icon from '../../components/common/Icon';
 import DatePickerModal from '../../components/common/DatePickerModal';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { loadLeaves } from '../../services/leaveService';
+import { loadAttendance } from '../../services/attendanceService';
 import { PUNCH_DUTY_ROLES, isWeekday, attendanceTrackingStart, isOnApprovedLeave } from '../../utils/attendanceStats';
 
 export const CompanyAttendanceScreen = ({ navigation }) => {
@@ -23,26 +23,27 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
   const palette = getRolePalette('HR');
   const { currentUser } = useAuth();
 
-  const { logs } = useSelector((state) => state.attendance);
   const deviceToday = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(deviceToday);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [refreshing, setRefreshing] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
 
-  // Leaves are NOT in Redux anymore — read them from AsyncStorage on mount and
-  // refresh on focus so approved leave (ON_LEAVE rows) is always up to date.
-  // isDataLoaded waits for that first read so no row is wrongly shown as
-  // absent while leaves are still loading.
+  // Punch logs & leaves are NOT in Redux anymore — read them from AsyncStorage
+  // on mount and refresh on focus so approved leave (ON_LEAVE rows) and every
+  // real punch are always up to date. isDataLoaded waits for that first read
+  // so no row is wrongly shown as absent while the data is still loading.
   const [leaves, setLeaves] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
-    const loadLeavesList = async () => {
+    const loadData = async () => {
       setLeaves(await loadLeaves());
+      setLogs(await loadAttendance());
       setIsDataLoaded(true);
     };
-    loadLeavesList();
-    const unsubscribe = navigation.addListener('focus', loadLeavesList);
+    loadData();
+    const unsubscribe = navigation.addListener('focus', loadData);
     return () => unsubscribe();
   }, [navigation]);
 

@@ -7,11 +7,11 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { loadLeaves } from '../../services/leaveService';
+import { loadAttendance } from '../../services/attendanceService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
@@ -31,22 +31,23 @@ export const TeamAttendanceScreen = ({ navigation }) => {
     })();
   }, []);
 
-  // Leaves are NOT in Redux anymore — read them from AsyncStorage on mount and
-  // refresh on focus so the "On Leave" / "Absent" sections stay accurate.
-  // isDataLoaded waits for that first read so no teammate flashes as absent.
+  // Punch logs & leaves are NOT in Redux anymore — read them from AsyncStorage
+  // on mount and refresh on focus so the "On Leave" / "Absent" sections stay
+  // accurate. isDataLoaded waits for that first read so no teammate flashes as
+  // absent while the data is still loading.
   const [leaves, setLeaves] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const load = async () => {
       setLeaves(await loadLeaves());
+      setLogs(await loadAttendance());
       setIsDataLoaded(true);
     };
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
   }, [navigation]);
-
-  const { logs } = useSelector((state) => state.attendance);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayStr);

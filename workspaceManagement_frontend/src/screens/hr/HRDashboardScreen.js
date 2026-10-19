@@ -15,6 +15,7 @@ import Icon from '../../components/common/Icon';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { loadTickets } from '../../services/ticketService';
 import { loadLeaves, approveLeave, rejectLeave } from '../../services/leaveService';
+import { loadAttendance } from '../../services/attendanceService';
 import { PUNCH_DUTY_ROLES, isWeekday } from '../../utils/attendanceStats';
 
 export const HRDashboardScreen = ({ navigation }) => {
@@ -22,17 +23,19 @@ export const HRDashboardScreen = ({ navigation }) => {
   const palette = getRolePalette('HR');
   const { currentUser } = useAuth();
 
-  const { logs } = useSelector((state) => state.attendance);
   const salaryConfig = useSelector((state) => state.salary.companyWide);
 
-  // Tickets & leaves live in AsyncStorage — load on demand (mount + focus) so
-  // the KPIs, leave requests card and recent activity always match the store.
+  // Tickets, leaves & punch logs live in AsyncStorage — load on demand
+  // (mount + focus) so the KPIs, leave requests card and recent activity
+  // always match the stored state.
   const [tickets, setTickets] = useState([]);
   const [leaves, setLeaves] = useState([]);
+  const [logs, setLogs] = useState([]);
   useEffect(() => {
     const load = async () => {
       setTickets(await loadTickets());
       setLeaves(await loadLeaves());
+      setLogs(await loadAttendance());
     };
     load();
     const unsubscribe = navigation.addListener('focus', load);

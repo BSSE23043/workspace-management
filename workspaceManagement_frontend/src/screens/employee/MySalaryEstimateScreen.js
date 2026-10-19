@@ -13,6 +13,7 @@ import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { loadLeaves } from '../../services/leaveService';
+import { loadAttendance } from '../../services/attendanceService';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
 import { elapsedWorkdaysInMonth, getUnexcusedAbsentDays, attendanceTrackingStart } from '../../utils/attendanceStats';
 
@@ -21,17 +22,18 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  // Real data from Redux (attendance, salary policy) + AsyncStorage leaves.
-  // Leaves are NOT in Redux anymore — load them on mount and refresh on focus
-  // so the paid-leave days below always match the stored state. isDataLoaded
-  // waits for that first read so no deduction flashes before leave is known.
-  const { logs } = useSelector((state) => state.attendance);
+  // Salary policy stays in Redux; leaves & punch logs come from AsyncStorage.
+  // They are loaded on mount and refreshed on focus so paid-leave days and
+  // present days below always match the stored state. isDataLoaded waits for
+  // that first read so no deduction flashes before the data is known.
   const salaryConfig = useSelector((state) => state.salary);
   const [leaves, setLeaves] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const load = async () => {
       setLeaves(await loadLeaves());
+      setLogs(await loadAttendance());
       setIsDataLoaded(true);
     };
     load();

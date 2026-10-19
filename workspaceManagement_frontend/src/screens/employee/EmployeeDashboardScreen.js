@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { loadTasks } from '../../services/taskService';
 import { loadLeaves } from '../../services/leaveService';
+import { loadAttendance } from '../../services/attendanceService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
@@ -21,19 +22,20 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  const { logs } = useSelector((state) => state.attendance);
   const salaryConfig = useSelector((state) => state.salary);
 
-  // Tasks & leaves are NOT in Redux anymore — read them from AsyncStorage on
-  // mount and refresh on focus so the task card and the salary card always
-  // show the latest state.
+  // Tasks, leaves & punch logs are NOT in Redux anymore — read them from
+  // AsyncStorage on mount and refresh on focus so the cards always show the
+  // latest state.
   const [tasks, setTasks] = useState([]);
   const [leaves, setLeaves] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const load = async () => {
       setTasks(await loadTasks());
       setLeaves(await loadLeaves());
+      setLogs(await loadAttendance());
       setIsDataLoaded(true);
     };
     load();

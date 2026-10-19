@@ -32,7 +32,7 @@ export const SEED_COMPANY = {
 // MANAGER / SHARED DEMO SEEDS REMOVED.
 // Attendance logs, leave requests, tasks and client requirements now start
 // EMPTY and are built up at runtime by real users:
-//   - employees punch attendance (attendanceSlice.checkIn / checkOut)
+//   - employees punch attendance (services/attendanceService.checkIn / checkOut)
 //   - employees submit leave (services/leaveService.applyLeave)
 //   - managers create tasks (services/taskService.createTask)
 //   - managers create client requirements (services/requirementService.addRequirement)
