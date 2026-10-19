@@ -13,32 +13,28 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
-import AvatarPickerModal from '../../components/common/AvatarPickerModal';
 import Icon from '../../components/common/Icon';
 import { getAvatarSource } from '../../assets/images';
+import { pickProfilePictureFromGallery } from '../../utils/imagePicker';
 
 export const EmployeeProfileScreen = ({ navigation }) => {
-  const { currentUser, updateCurrentUserDP, logout, quickDemoLogin } = useAuth();
+  const { currentUser, updateCurrentUser, logout } = useAuth();
   const { getRolePalette, isDark, toggleTheme } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  const [showAvatarModal, setShowAvatarModal] = useState(false);
-  const [biometricLogin, setBiometricLogin] = useState(true);
+  const [taskPushAlerts, setTaskPushAlerts] = useState(true);
+
+  // Opens the device gallery to pick a new profile picture (DP).
+  const handleChangeDp = () => {
+    pickProfilePictureFromGallery((uri) => {
+      updateCurrentUser({ avatarKey: uri, avatarCustomUri: uri });
+    });
+  };
 
   const handleLogout = () => {
     Alert.alert('Terminate Session', 'Are you sure you want to log out of employee workspace?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Log Out', style: 'destructive', onPress: () => logout() },
-    ]);
-  };
-
-  const handleSwitchDemoRole = () => {
-    Alert.alert('Switch Demo Role', 'Select profile to simulate:', [
-      { text: 'Admin (Usman)', onPress: () => quickDemoLogin('ADM-001') },
-      { text: 'HR (Sana)', onPress: () => quickDemoLogin('HR-104') },
-      { text: 'Manager (Bilal)', onPress: () => quickDemoLogin('MGR-022') },
-      { text: 'Client (Zafar Corp)', onPress: () => quickDemoLogin('CLT-501') },
-      { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
@@ -62,27 +58,17 @@ export const EmployeeProfileScreen = ({ navigation }) => {
             {/* Active DP change badge for Employee */}
             <TouchableOpacity
               style={[styles.cameraBadge, { backgroundColor: palette.primary }]}
-              onPress={() => setShowAvatarModal(true)}
+              onPress={handleChangeDp}
             >
               <Icon name="camera" size={14} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.userName, { color: palette.textPrimary }]}>{currentUser?.name || 'Ali Raza'}</Text>
+          <Text style={[styles.userName, { color: palette.textPrimary }]}>{currentUser?.name || 'Team Member'}</Text>
           <View style={[styles.roleTag, { backgroundColor: palette.primary }]}>
             <Text style={styles.roleTagText}>Software Engineer II</Text>
           </View>
           <Text style={[styles.userEmail, { color: palette.textSecondary }]}>{currentUser?.email}</Text>
-
-          <TouchableOpacity
-            style={[styles.changeDpBtn, { borderColor: palette.primary }]}
-            onPress={() => setShowAvatarModal(true)}
-          >
-            <Icon name="camera" size={14} color={palette.primary} />
-            <Text style={[styles.changeDpBtnText, { color: palette.primary }]}>
-              📷 Change Profile Photo
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Telemetry & Leave Quota Row */}
@@ -123,13 +109,13 @@ export const EmployeeProfileScreen = ({ navigation }) => {
 
           <AppInput
             label="Full Legal Name"
-            value={currentUser?.name || 'Ali Raza'}
+            value={currentUser?.name || ''}
             editable={false}
           />
 
           <AppInput
             label="Work Email"
-            value={currentUser?.email || 'ali.raza@acmetech.com'}
+            value={currentUser?.email || ''}
             editable={false}
           />
 
@@ -166,7 +152,7 @@ export const EmployeeProfileScreen = ({ navigation }) => {
 
           <AppInput
             label="Assigned Reporting Manager"
-            value="Bilal Ahmed (Engineering Manager)"
+            value={currentUser?.reportsTo || '—'}
             editable={false}
           />
 
@@ -190,22 +176,22 @@ export const EmployeeProfileScreen = ({ navigation }) => {
           {/* Note: NO "Update Personal Info" button is rendered per blueprint specification */}
         </View>
 
-        {/* Security & Terminal Settings */}
+        {/* Workspace Preferences & Settings */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
-            Security &amp; Terminal Settings
+            Workspace Preferences &amp; Settings
           </Text>
 
           <View style={styles.prefRow}>
             <View>
-              <Text style={[styles.prefTitle, { color: palette.textPrimary }]}>Biometric Quick Unlock</Text>
-              <Text style={[styles.prefSub, { color: palette.textSecondary }]}>Use FaceID / Fingerprint for check-ins</Text>
+              <Text style={[styles.prefTitle, { color: palette.textPrimary }]}>Task &amp; Sprint Push Alerts</Text>
+              <Text style={[styles.prefSub, { color: palette.textSecondary }]}>Notify when assigned sprint tasks or deadlines change</Text>
             </View>
             <Switch
-              value={biometricLogin}
-              onValueChange={setBiometricLogin}
+              value={taskPushAlerts}
+              onValueChange={setTaskPushAlerts}
               trackColor={{ false: '#CBD5E1', true: '#C7D2FE' }}
-              thumbColor={biometricLogin ? '#4338CA' : '#94A3B8'}
+              thumbColor={taskPushAlerts ? palette.primary : '#94A3B8'}
             />
           </View>
 
@@ -218,35 +204,19 @@ export const EmployeeProfileScreen = ({ navigation }) => {
               value={isDark}
               onValueChange={toggleTheme}
               trackColor={{ false: '#CBD5E1', true: '#C7D2FE' }}
-              thumbColor={isDark ? '#4338CA' : '#94A3B8'}
+              thumbColor={isDark ? palette.primary : '#94A3B8'}
             />
           </View>
         </View>
 
-        {/* Switch Demo Role & Terminate Session */}
+        {/* Terminate Session */}
         <View style={styles.bottomActions}>
-          <TouchableOpacity
-            style={[styles.switchRoleBtn, { borderColor: palette.cardBorder }]}
-            onPress={handleSwitchDemoRole}
-          >
-            <Icon name="people" size={16} color={palette.primary} />
-            <Text style={[styles.switchRoleText, { color: palette.primary }]}>Quick Switch Demo Role</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Icon name="log-out" size={16} color="#DC2626" />
             <Text style={styles.logoutBtnText}>Terminate Session / Log Out</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      <AvatarPickerModal
-        visible={showAvatarModal}
-        onClose={() => setShowAvatarModal(false)}
-        onSelectAvatar={(key) => updateCurrentUserDP(key)}
-        currentAvatar={currentUser?.avatarKey}
-        title="Change Display Picture"
-      />
     </View>
   );
 };
@@ -306,19 +276,6 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 12,
     marginBottom: 12,
-  },
-  changeDpBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  changeDpBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   quotaCard: {
     borderRadius: 12,

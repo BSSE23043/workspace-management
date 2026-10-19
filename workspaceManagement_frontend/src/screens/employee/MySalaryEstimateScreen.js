@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,35 +14,78 @@ import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
 
+const MONTH_CYCLES = [
+  {
+    id: 'OCT_2026',
+    label: 'October 2026',
+    subtitle: 'Ongoing Cycle',
+    isCurrent: true,
+    presentDays: 19,
+    paidLeaveDays: 1,
+    unpaidLeaveDays: 1,
+    absentDays: 1,
+    statusText: 'Audited by HR • Projected Bank Transfer on Oct 31, 2026',
+  },
+  {
+    id: 'SEP_2026',
+    label: 'September 2026',
+    subtitle: 'Paid & Disbursed',
+    isCurrent: false,
+    presentDays: 22,
+    paidLeaveDays: 0,
+    unpaidLeaveDays: 0,
+    absentDays: 0,
+    statusText: 'Disbursed Sep 30, 2026 • Habib Bank Ref: HBL-982103',
+  },
+  {
+    id: 'AUG_2026',
+    label: 'August 2026',
+    subtitle: 'Paid & Disbursed',
+    isCurrent: false,
+    presentDays: 21,
+    paidLeaveDays: 1,
+    unpaidLeaveDays: 0,
+    absentDays: 0,
+    statusText: 'Disbursed Aug 31, 2026 • Habib Bank Ref: HBL-881290',
+  },
+  {
+    id: 'JUL_2026',
+    label: 'July 2026',
+    subtitle: 'Paid & Disbursed',
+    isCurrent: false,
+    presentDays: 20,
+    paidLeaveDays: 1,
+    unpaidLeaveDays: 1,
+    absentDays: 0,
+    statusText: 'Disbursed Jul 31, 2026 • Habib Bank Ref: HBL-771802',
+  },
+];
+
 export const MySalaryEstimateScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  // Exact blueprint numbers for Ali Raza:
-  // 22 Expected, 19 Present, 1 Paid Leave, 1 Unpaid Leave (-3500), 1 Absent (-5000)
-  // Base: 150,000 PKR, Deductions: -8,500 PKR, Allowances: +20,000 PKR, Net: 161,500 PKR
+  const [selectedCycleId, setSelectedCycleId] = useState('OCT_2026');
+  const activeCycle = MONTH_CYCLES.find((c) => c.id === selectedCycleId) || MONTH_CYCLES[0];
+
   const estimate = useMemo(() => {
     return calculateSalaryEstimate({
       baseSalary: 150000,
       workingDaysPerPeriod: 22,
-      presentDays: 19,
-      paidLeaveDays: 1,
-      unpaidLeaveDays: 1,
-      absentDays: 1,
+      presentDays: activeCycle.presentDays,
+      paidLeaveDays: activeCycle.paidLeaveDays,
+      unpaidLeaveDays: activeCycle.unpaidLeaveDays,
+      absentDays: activeCycle.absentDays,
       deductionPerAbsentDay: 5000,
       deductionPerUnpaidLeaveDay: 3500,
-      allowanceItems: [
-        { id: 'trans', name: 'Transport Allowance', amount: 15000 },
-        { id: 'util', name: 'Internet & Utility Allowance', amount: 5000 },
-      ],
     });
-  }, []);
+  }, [activeCycle]);
 
   const handleDownloadPDF = () => {
     Alert.alert(
       'Download Payslip PDF',
-      'Official October 2026 digital payslip statement downloaded to your device.',
+      `Official digital payslip statement for ${activeCycle.label} downloaded to your device.`,
       [{ text: 'OK' }]
     );
   };
@@ -57,11 +100,43 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Month Cycle Selector Strip */}
+        <View style={styles.cycleStripWrap}>
+          <Text style={[styles.cycleStripLabel, { color: palette.textSecondary }]}>
+            Select Working Cycle / Past Payslip:
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cyclesScroll}>
+            {MONTH_CYCLES.map((cycle) => {
+              const isSelected = cycle.id === selectedCycleId;
+              return (
+                <TouchableOpacity
+                  key={cycle.id}
+                  style={[
+                    styles.cycleChip,
+                    { borderColor: palette.cardBorder, backgroundColor: palette.card },
+                    isSelected && { borderColor: palette.primary, backgroundColor: palette.badge },
+                  ]}
+                  onPress={() => setSelectedCycleId(cycle.id)}
+                >
+                  <Text style={[styles.cycleChipText, { color: isSelected ? palette.primary : palette.textPrimary }]}>
+                    {cycle.label}
+                  </Text>
+                  <Text style={[styles.cycleChipSub, { color: isSelected ? palette.primary : palette.textSecondary }]}>
+                    {cycle.subtitle}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
         {/* Hero Net Payout Card */}
         <View style={[styles.heroCard, { backgroundColor: palette.primary }]}>
-          <Text style={styles.heroSub}>CYCLE: OCTOBER 2026 • ESTIMATED NET PAYOUT</Text>
+          <Text style={styles.heroSub}>
+            CYCLE: {activeCycle.label.toUpperCase()} • {activeCycle.isCurrent ? 'ESTIMATED NET PAYOUT' : 'FINAL DISBURSED NET'}
+          </Text>
           <Text style={styles.heroAmount}>{formatCurrency(estimate.netSalary)}</Text>
-          <Text style={styles.heroStatus}>Status: Audited by HR • Ready for Bank Transfer</Text>
+          <Text style={styles.heroStatus}>Status: {activeCycle.statusText}</Text>
 
           <TouchableOpacity style={styles.downloadPdfBtn} onPress={handleDownloadPDF} activeOpacity={0.85}>
             <Icon name="document-text" size={15} color={palette.primary} />
@@ -137,27 +212,6 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Itemized Monthly Allowances */}
-        <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
-              Itemized Monthly Allowances
-            </Text>
-            <Text style={[styles.totalAllowText, { color: '#16A34A' }]}>
-              +{formatCurrency(estimate.totalAllowances)}
-            </Text>
-          </View>
-
-          {estimate.allowanceItems.map((alw) => (
-            <View key={alw.id} style={styles.itemRow}>
-              <Text style={[styles.itemLabel, { color: palette.textSecondary }]}>{alw.name}:</Text>
-              <Text style={[styles.itemVal, { color: '#16A34A' }]}>
-                +{formatCurrency(alw.amount)}
-              </Text>
-            </View>
-          ))}
-        </View>
-
         {/* Transparent Salary Calculation Rule & HR Ticket Link */}
         <View style={[styles.formulaCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <View style={styles.formulaHeaderRow}>
@@ -167,12 +221,12 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
             </Text>
           </View>
           <Text style={[styles.formulaText, { color: palette.textSecondary }]}>
-            Net = Base (150,000) - Total Deductions (8,500) + Fixed Allowances (20,000) = 161,500 PKR
+            {`Net = Base (${estimate.baseSalary.toLocaleString()}) - Total Deductions (${estimate.totalDeductions.toLocaleString()}) = ${estimate.netSalary.toLocaleString()} PKR`}
           </Text>
 
           <TouchableOpacity
             style={styles.openTicketLink}
-            onPress={() => navigation.navigate('Work & Requests')}
+            onPress={() => navigation.navigate('Work & Requests', { initialTab: 'TICKETS' })}
           >
             <Text style={[styles.openTicketLinkText, { color: palette.primary }]}>
               Discrepancy? Open an HR Ticket →
@@ -191,6 +245,36 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
+  },
+  cycleStripWrap: {
+    marginBottom: 14,
+  },
+  cycleStripLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  cyclesScroll: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cycleChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 105,
+    alignItems: 'center',
+  },
+  cycleChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  cycleChipSub: {
+    fontSize: 10,
+    marginTop: 1,
   },
   heroCard: {
     borderRadius: 14,
@@ -291,10 +375,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   totalDeductText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  totalAllowText: {
     fontSize: 14,
     fontWeight: '800',
   },

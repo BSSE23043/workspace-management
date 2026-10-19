@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,49 +8,92 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { addClientClarificationReply } from '../../store/slices/requirementsSlice';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import {
+  loadRequirements,
+  addClientClarificationReply,
+} from '../../services/requirementService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+// Shared "time ago" label so broadcasts and replies show their real age.
+import { timeAgo } from '../../utils/timeAgo';
 
 const FILTER_TABS = ['All', 'In Progress', 'Completed'];
 
 export const MyRequirementsScreen = ({ navigation }) => {
-  const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('CLIENT');
 
-  const { requirements } = useSelector((state) => state.requirements);
-  const [selectedTab, setSelectedTab] = useState('All');
+  // Requirements are NOT in Redux anymore — read them from AsyncStorage on
+  // mount and refresh on focus, so manager updates show up without a restart.
+  const [requirements, setRequirements] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setRequirements(await loadRequirements());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
 
-  // Featured requirement REQ-098 (or REQ-101)
+  const [selectedTab, setSelectedTab] = useState('All');
+  const scrollViewRef = useRef(null);
+
+  // A requirement is created against one specific client (clientId), so this
+  // client only sees the requirements that belong to its own account.
+  const clientRequirements = requirements.filter((r) => r.clientId === currentUser?.id);
+
+  // Which requirement is expanded in the big details card. Tapping a card in
+  // "Other Requirements & Modules" sets this id; before any tap (or if the
+  // selected one disappears) we fall back to the first requirement. This is
+  // the same selectedReqId pattern the manager's coordination screen uses.
+  const [selectedReqId, setSelectedReqId] = useState(null);
   const featuredReq =
-    requirements.find((r) => r.id === 'REQ-098') || requirements[0];
-  const otherReqs = requirements.filter((r) => r.id !== featuredReq?.id);
+    clientRequirements.find((r) => r.id === selectedReqId) || clientRequirements[0] || null;
+
+  // The rest are listed underneath the featured card.
+  const otherReqs = clientRequirements.filter((r) => r.id !== featuredReq?.id);
+
+  // Tapping an "other" requirement makes it the featured one and scrolls back
+  // to the top so the client immediately sees its milestones/broadcasts.
+  const handleSelectRequirement = (reqId) => {
+    setSelectedReqId(reqId);
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: 0, animated: true });
+    }
+  };
 
   const [clarificationReply, setClarificationReply] = useState('');
 
-  const handleSendClarification = () => {
-    if (!clarificationReply.trim()) return;
-    dispatch(
-      addClientClarificationReply({
-        reqId: featuredReq.id,
-        author: `${currentUser?.name || 'Zafar Ahmed'} (Zafar Corp)`,
-        content: clarificationReply.trim(),
-      })
-    );
+  const handleSendClarification = async () => {
+    if (!clarificationReply.trim() || !featuredReq) return;
+    // Saves the reply to AsyncStorage and refreshes local state with the
+    // saved list (requirementService hands it straight back).
+    const nextReqs = await addClientClarificationReply({
+      reqId: featuredReq.id,
+      author: currentUser?.name || 'Client',
+      content: clarificationReply.trim(),
+    });
+    setRequirements(nextReqs);
     setClarificationReply('');
-    Alert.alert('Clarification Sent', 'Your reply has been dispatched to Bilal Ahmed.');
+    Alert.alert('Clarification Sent', 'Your reply has been dispatched to the engineering manager.');
   };
+
+  // Wait for the first AsyncStorage read so the list doesn't flash its empty
+  // state while real requirements are still loading.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
       <HeaderBar
         title="Requirements & Milestones"
-        subtitle="Zafar Corp Deliverables"
+        subtitle={`${currentUser?.name || 'Client'} Deliverables`}
         showBack
         navigation={navigation}
       />
@@ -83,7 +126,11 @@ export const MyRequirementsScreen = ({ navigation }) => {
         })}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Featured Requirement Card (REQ-098: Mobile Portal Dark Mode & Role Accents) */}
         {featuredReq && (
           <View style={[styles.featuredCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
@@ -144,15 +191,22 @@ export const MyRequirementsScreen = ({ navigation }) => {
               Official Broadcasts From Engineering Management
             </Text>
             <View style={styles.broadcastsContainer}>
-              {(featuredReq.broadcasts || []).map((b) => (
-                <View key={b.id} style={[styles.broadcastItem, { backgroundColor: palette.inputBackground }]}>
-                  <View style={styles.broadcastItemHeader}>
-                    <Text style={[styles.broadcastAuthor, { color: palette.primary }]}>{b.author}</Text>
-                    <Text style={styles.broadcastTime}>{b.time}</Text>
+              {(featuredReq.broadcasts || []).length === 0 ? (
+                <Text style={[styles.broadcastEmpty, { color: palette.textSecondary }]}>
+                  No broadcasts yet. Updates Engineering Management publishes for this requirement
+                  will appear here.
+                </Text>
+              ) : (
+                (featuredReq.broadcasts || []).map((b) => (
+                  <View key={b.id} style={[styles.broadcastItem, { backgroundColor: palette.inputBackground }]}>
+                    <View style={styles.broadcastItemHeader}>
+                      <Text style={[styles.broadcastAuthor, { color: palette.primary }]}>{b.author}</Text>
+                      <Text style={styles.broadcastTime}>{timeAgo(b.createdAt)}</Text>
+                    </View>
+                    <Text style={[styles.broadcastContent, { color: palette.textPrimary }]}>{b.content}</Text>
                   </View>
-                  <Text style={[styles.broadcastContent, { color: palette.textPrimary }]}>{b.content}</Text>
-                </View>
-              ))}
+                ))
+              )}
             </View>
 
             {/* Client Clarification Replies & Reply Input */}
@@ -161,7 +215,10 @@ export const MyRequirementsScreen = ({ navigation }) => {
             </Text>
             {(featuredReq.clarificationReplies || []).map((cr) => (
               <View key={cr.id} style={styles.replyBubble}>
-                <Text style={styles.replyAuthor}>{cr.author}:</Text>
+                <View style={styles.replyHeaderRow}>
+                  <Text style={styles.replyAuthor}>{cr.author}</Text>
+                  <Text style={styles.replyTime}>{timeAgo(cr.createdAt)}</Text>
+                </View>
                 <Text style={styles.replyContent}>{cr.content}</Text>
               </View>
             ))}
@@ -184,27 +241,44 @@ export const MyRequirementsScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* Other Requirements List */}
-        <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
-          Other Requirements &amp; Modules
-        </Text>
-        {otherReqs.map((req) => (
-          <View
-            key={req.id}
-            style={[styles.otherReqCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
-          >
-            <View style={styles.otherReqHeader}>
-              <Text style={[styles.otherReqCode, { color: palette.primary }]}>{req.code}</Text>
-              <Text style={[styles.otherReqDue, { color: palette.textSecondary }]}>
-                Due: {req.contractDeadline}
-              </Text>
-            </View>
-            <Text style={[styles.otherReqTitle, { color: palette.textPrimary }]}>{req.title}</Text>
-            <Text style={[styles.otherReqProgress, { color: palette.textSecondary }]}>
-              {req.progressPercent}% Completed • {req.completedMilestones} of {req.totalMilestones} Milestones
+        {/* Other Requirements List (or empty state) */}
+        {clientRequirements.length === 0 ? (
+          <View style={[styles.emptyCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
+            <Icon name="flag" size={16} color={palette.primary} />
+            <Text style={[styles.emptyCardText, { color: palette.textSecondary }]}>
+              No requirements have been scoped to your organization yet. Engineering Management
+              will publish them here as soon as they are created.
             </Text>
           </View>
-        ))}
+        ) : (
+          <>
+            <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
+              Other Requirements &amp; Modules
+            </Text>
+            {otherReqs.map((req) => (
+              <TouchableOpacity
+                key={req.id}
+                style={[styles.otherReqCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
+                activeOpacity={0.85}
+                onPress={() => handleSelectRequirement(req.id)}
+              >
+                <View style={styles.otherReqHeader}>
+                  <Text style={[styles.otherReqCode, { color: palette.primary }]}>{req.code}</Text>
+                  <Text style={[styles.otherReqDue, { color: palette.textSecondary }]}>
+                    Due: {req.contractDeadline}
+                  </Text>
+                </View>
+                <Text style={[styles.otherReqTitle, { color: palette.textPrimary }]}>{req.title}</Text>
+                <Text style={[styles.otherReqProgress, { color: palette.textSecondary }]}>
+                  {req.progressPercent}% Completed • {req.completedMilestones} of {req.totalMilestones} Milestones
+                </Text>
+                <Text style={[styles.otherReqOpen, { color: palette.primary }]}>
+                  Tap to view details →
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -362,6 +436,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  // Shown when a requirement has no broadcasts yet (nothing is auto-posted on
+  // creation anymore).
+  broadcastEmpty: {
+    fontSize: 11,
+    lineHeight: 17,
+  },
   clarificationHeading: {
     fontSize: 12,
     fontWeight: '700',
@@ -373,9 +453,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginBottom: 8,
   },
+  replyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   replyAuthor: {
     fontSize: 10,
     fontWeight: '700',
+    color: '#92400E',
+  },
+  // Timestamp of the client's own reply (same "time ago" format as broadcasts).
+  replyTime: {
+    fontSize: 10,
     color: '#92400E',
   },
   replyContent: {
@@ -410,6 +500,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 10,
   },
+  emptyCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  emptyCardText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   otherReqCard: {
     borderRadius: 10,
     borderWidth: 1,
@@ -435,6 +538,12 @@ const styles = StyleSheet.create({
   },
   otherReqProgress: {
     fontSize: 11,
+  },
+  // Hint shown on tappable "Other Requirements" cards.
+  otherReqOpen: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 8,
   },
 });
 

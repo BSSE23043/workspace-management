@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
@@ -6,10 +6,22 @@ import MyLeaveRequestsScreen from './MyLeaveRequestsScreen';
 import MyHRTicketsScreen from './MyHRTicketsScreen';
 import MyTasksScreen from './MyTasksScreen';
 
-export const WorkAndRequestsHubScreen = ({ navigation }) => {
+export const WorkAndRequestsHubScreen = ({ navigation, route }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
   const [activeSegment, setActiveSegment] = useState('LEAVES'); // 'LEAVES' | 'TICKETS' | 'TASKS'
+
+  // When a caller passes ?initialTab=... (e.g. the Salary screen's
+  // "Open an HR Ticket" link -> TICKETS), open that segment ONCE, then clear
+  // the param so later plain opens of this tab keep remembering the user's
+  // last opened segment. (Allowed concept: plain useEffect - the param change
+  // re-renders the screen, so no focus hook is needed.)
+  useEffect(() => {
+    if (route?.params?.initialTab) {
+      setActiveSegment(route.params.initialTab.toUpperCase());
+      navigation.setParams({ initialTab: undefined });
+    }
+  }, [route?.params?.initialTab]);
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
@@ -80,9 +92,9 @@ export const WorkAndRequestsHubScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.contentWrap}>
-        {activeSegment === 'LEAVES' && <MyLeaveRequestsScreen navigation={navigation} />}
-        {activeSegment === 'TICKETS' && <MyHRTicketsScreen navigation={navigation} />}
-        {activeSegment === 'TASKS' && <MyTasksScreen navigation={navigation} />}
+        {activeSegment === 'LEAVES' && <MyLeaveRequestsScreen navigation={navigation} isEmbedded={true} />}
+        {activeSegment === 'TICKETS' && <MyHRTicketsScreen navigation={navigation} isEmbedded={true} />}
+        {activeSegment === 'TASKS' && <MyTasksScreen navigation={navigation} isEmbedded={true} />}
       </View>
     </View>
   );

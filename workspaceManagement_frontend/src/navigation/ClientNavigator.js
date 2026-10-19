@@ -25,7 +25,8 @@ const ClientTabs = () => {
         tabBarInactiveTintColor: '#64748B',
         tabBarStyle: {
           backgroundColor: palette.card,
-          borderTopColor: palette.cardBorder,
+          borderTopColor: palette.primary,
+          borderTopWidth: 2.5,
           height: 60,
           paddingBottom: 6,
           paddingTop: 6,

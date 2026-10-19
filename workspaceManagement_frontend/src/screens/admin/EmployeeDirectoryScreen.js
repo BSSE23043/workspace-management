@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,9 @@ import {
   Switch,
   RefreshControl,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { toggleUserActive } from '../../store/slices/usersSlice';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { getAvatarSource } from '../../assets/images';
@@ -27,24 +27,59 @@ const ROLE_FILTERS = [
 ];
 
 export const EmployeeDirectoryScreen = ({ navigation }) => {
-  const dispatch = useDispatch();
   const { getRolePalette, isDark } = useTheme();
   const palette = getRolePalette('ADMIN');
 
-  const { users, departments } = useSelector((state) => state.users);
+  const { currentUser } = useAuth();
 
+  // Users are loaded from AsyncStorage (the single source of truth) into
+  // local state — Redux no longer stores the user list.
+  const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState('ALL');
   const [sortAsc, setSortAsc] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Pull to refresh handler wrapped with useCallback (Syllabus topic 8)
-  const onRefresh = useCallback(() => {
+  const loadUsers = useCallback(async () => {
+    const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+    // Company admins created by the Super Admin carry a companyId; they only
+    // see users of their own company. Everyone else sees the full list.
+    const scopedUsers = currentUser?.companyId
+      ? storedUsers.filter((u) => u.companyId === currentUser.companyId)
+      : storedUsers;
+    setUsers(scopedUsers);
+  }, [currentUser]);
+
+  // Load on mount + reload whenever the screen regains focus
+  // (e.g. after adding a user in the Employee Form).
+  useEffect(() => {
+    loadUsers();
+    const unsubscribe = navigation.addListener('focus', loadUsers);
+    return unsubscribe;
+  }, [loadUsers]);
+
+  // Pull to refresh handler — now actually reloads users from storage
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 700);
-  }, []);
+    await loadUsers();
+    setRefreshing(false);
+  }, [loadUsers]);
+
+  // Toggle active flag and persist the change to AsyncStorage
+  const handleToggleActive = useCallback(
+    async (userId) => {
+      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+      const updatedUsers = storedUsers.map((u) =>
+        u.id === userId ? { ...u, isActive: u.isActive === false } : u
+      );
+      await storageService.setItem(STORAGE_KEYS.USERS, updatedUsers);
+      // Mirror the same flip in the local (scoped) list
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, isActive: u.isActive === false } : u))
+      );
+    },
+    []
+  );
 
   // Filter and group users into SectionList sections
   const sections = useMemo(() => {
@@ -55,8 +90,7 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
       const matchesSearch =
         !q ||
         u.name.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        (u.department && u.department.toLowerCase().includes(q));
+        u.email.toLowerCase().includes(q);
       return matchesRole && matchesSearch;
     });
 
@@ -67,19 +101,20 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
         : b.name.localeCompare(a.name);
     });
 
-    // 3. Group by Department for SectionList
-    const deptMap = {};
+    // 3. Group by Role for SectionList (the system has no departments —
+    //    users are only typed as Employee / Manager / HR / Admin / Client)
+    const roleMap = {};
     filtered.forEach((user) => {
-      const deptKey = user.department || 'Unassigned Department';
-      if (!deptMap[deptKey]) {
-        deptMap[deptKey] = [];
+      const roleKey = user.role || 'OTHER';
+      if (!roleMap[roleKey]) {
+        roleMap[roleKey] = [];
       }
-      deptMap[deptKey].push(user);
+      roleMap[roleKey].push(user);
     });
 
-    return Object.keys(deptMap).map((deptName) => ({
-      title: `DEPARTMENT: ${deptName.toUpperCase()} (${deptMap[deptName].length})`,
-      data: deptMap[deptName],
+    return Object.keys(roleMap).map((roleKey) => ({
+      title: `ROLE: ${roleKey} (${roleMap[roleKey].length})`,
+      data: roleMap[roleKey],
     }));
   }, [users, selectedRole, searchQuery, sortAsc]);
 
@@ -124,7 +159,7 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
             </Text>
             <Switch
               value={isActive}
-              onValueChange={() => dispatch(toggleUserActive(item.id))}
+              onValueChange={() => handleToggleActive(item.id)}
               trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
               thumbColor={isActive ? '#16A34A' : '#94A3B8'}
             />
@@ -132,7 +167,7 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
         </TouchableOpacity>
       );
     },
-    [palette, dispatch, navigation]
+    [palette, navigation, handleToggleActive]
   );
 
   const renderSectionHeader = ({ section: { title } }) => (
@@ -164,7 +199,7 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search employees by name, email, dept..."
+          placeholder="Search employees by name or email..."
           placeholderTextColor="#94A3B8"
           style={[styles.searchInput, { color: palette.textPrimary }]}
         />

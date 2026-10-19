@@ -1,27 +1,20 @@
 import { configureStore } from '@reduxjs/toolkit';
 import companyReducer from './slices/companySlice';
-import usersReducer from './slices/usersSlice';
 import attendanceReducer from './slices/attendanceSlice';
 import salaryReducer from './slices/salarySlice';
 import leavesReducer from './slices/leavesSlice';
 import ticketsReducer from './slices/ticketsSlice';
-import tasksReducer from './slices/tasksSlice';
-import requirementsReducer from './slices/requirementsSlice';
-import announcementsReducer from './slices/announcementsSlice';
-import notificationsReducer from './slices/notificationsSlice';
+// NOTE: tasks & requirements were removed from Redux on purpose — they are
+// loaded from AsyncStorage on demand by services/taskService.js and
+// services/requirementService.js instead (see those files for the details).
 
 export const store = configureStore({
   reducer: {
     company: companyReducer,
-    users: usersReducer,
     attendance: attendanceReducer,
     salary: salaryReducer,
     leaves: leavesReducer,
     tickets: ticketsReducer,
-    tasks: tasksReducer,
-    requirements: requirementsReducer,
-    announcements: announcementsReducer,
-    notifications: notificationsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { loadRequirements } from '../../services/requirementService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
@@ -17,51 +17,90 @@ export const ClientDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('CLIENT');
 
-  const { requirements } = useSelector((state) => state.requirements);
+  // Requirements are NOT in Redux anymore — read them from AsyncStorage on
+  // mount and refresh on focus, so a milestone ticked off by the manager
+  // shows up on the client's dashboard right away.
+  const [requirements, setRequirements] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setRequirements(await loadRequirements());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
+
+  // A requirement belongs to exactly one client (clientId is set by the manager
+  // when it is created), so this client only ever sees its own deliverables.
+  const clientRequirements = requirements.filter((r) => r.clientId === currentUser?.id);
+
+  // Real numbers for the KPI grid — nothing is hardcoded. Each requirement
+  // carries a lifecycleState that the manager moves along
+  // (IN_PROGRESS / AWAITING_CLIENT / COMPLETED), so the tiles simply tally
+  // this client's own requirements. A fresh client with no requirements
+  // honestly sees four zeros.
+  const totalReqs = clientRequirements.length;
+  const inProgressCount = clientRequirements.filter(
+    (r) => r.lifecycleState === 'IN_PROGRESS'
+  ).length;
+  const awaitingClientCount = clientRequirements.filter(
+    (r) => r.lifecycleState === 'AWAITING_CLIENT'
+  ).length;
+  const completedCount = clientRequirements.filter(
+    (r) => r.lifecycleState === 'COMPLETED'
+  ).length;
+
+  // Wait for the first AsyncStorage read so the KPIs don't flash while real
+  // deliverables are still loading.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
       <HeaderBar
         title="Client Executive Dashboard"
-        subtitle="Zafar Corp"
+        subtitle={currentUser?.name || 'Client Portal'}
         navigation={navigation}
-        statusText="PARTNER TIER"
-        statusColor="#92400E"
+        showStatus={false}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Welcome Header */}
         <View style={styles.welcomeCard}>
           <Text style={[styles.welcomeTitle, { color: palette.textPrimary }]}>
-            Welcome, Zafar Corp Team
+            Welcome, {currentUser?.name || 'Client'} Team
           </Text>
           <Text style={[styles.welcomeSub, { color: palette.textSecondary }]}>
             Enterprise Partner Deliverable Tracker &amp; Progress Hub
           </Text>
         </View>
 
-        {/* 2x2 Deliverable Counter Grid */}
+        {/* 2x2 Deliverable Counter Grid — all values derived from the client's
+            own requirements in AsyncStorage (previously hardcoded demo numbers) */}
         <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>
           Contract Deliverables Status
         </Text>
         <View style={styles.kpiGrid}>
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiVal, { color: '#92400E' }]}>1</Text>
-            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Submitted</Text>
+            <Text style={[styles.kpiVal, { color: '#92400E' }]}>{totalReqs}</Text>
+            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Total Requirements</Text>
           </View>
 
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiVal, { color: '#1D4ED8' }]}>2</Text>
+            <Text style={[styles.kpiVal, { color: '#1D4ED8' }]}>{inProgressCount}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>In Progress</Text>
           </View>
 
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiVal, { color: '#D97706' }]}>1</Text>
-            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Attention Required</Text>
+            <Text style={[styles.kpiVal, { color: '#D97706' }]}>{awaitingClientCount}</Text>
+            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Awaiting Client</Text>
           </View>
 
           <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <Text style={[styles.kpiVal, { color: '#16A34A' }]}>4</Text>
+            <Text style={[styles.kpiVal, { color: '#16A34A' }]}>{completedCount}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Completed</Text>
           </View>
         </View>
@@ -81,7 +120,16 @@ export const ClientDashboardScreen = ({ navigation }) => {
           Recent Milestone Broadcasts
         </Text>
         <View style={styles.broadcastsList}>
-          {requirements.map((req) => {
+          {clientRequirements.length === 0 ? (
+            <View style={[styles.emptyCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
+              <Icon name="flag" size={16} color={palette.primary} />
+              <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
+                No requirements have been scoped to your organization yet. Engineering Management
+                will publish them here as soon as they are created.
+              </Text>
+            </View>
+          ) : (
+          clientRequirements.map((req) => {
             const latestBroadcast = req.broadcasts?.[0];
             return (
               <TouchableOpacity
@@ -106,7 +154,7 @@ export const ClientDashboardScreen = ({ navigation }) => {
 
                 <View style={[styles.bcFooter, { borderTopColor: palette.divider }]}>
                   <Text style={[styles.bcAuthor, { color: palette.textSecondary }]}>
-                    {latestBroadcast?.author || 'Bilal Ahmed (Engineering Manager)'}
+                    {latestBroadcast?.author || 'Engineering Management'}
                   </Text>
                   <Text style={[styles.viewDetailsText, { color: palette.primary }]}>
                     View Milestones →
@@ -114,7 +162,8 @@ export const ClientDashboardScreen = ({ navigation }) => {
                 </View>
               </TouchableOpacity>
             );
-          })}
+          })
+          )}
         </View>
       </ScrollView>
     </View>
@@ -183,6 +232,19 @@ const styles = StyleSheet.create({
   },
   broadcastsList: {
     gap: 12,
+  },
+  emptyCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  emptyText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
   },
   broadcastCard: {
     borderRadius: 12,

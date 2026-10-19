@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useTheme } from '../../context/ThemeContext';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
@@ -18,74 +19,95 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
 
-  const { users } = useSelector((state) => state.users);
-  const salaryConfig = useSelector((state) => state.salary);
-
-  const [selectedUserId, setSelectedUserId] = useState('EMP-089'); // Ali Raza
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState('October 2026');
-
-  const selectedUser = users.find((u) => u.id === selectedUserId) || users[0];
-
-  // Specific attendance values for Ali Raza as specified in blueprint
-  // 19 Present, 1 Paid Leave, 1 Unpaid Leave, 1 Absent
-  const aliBreakdown = useMemo(() => {
-    return calculateSalaryEstimate({
-      baseSalary: 150000,
-      workingDaysPerPeriod: 22,
-      presentDays: 19,
-      paidLeaveDays: 1,
-      unpaidLeaveDays: 1,
-      absentDays: 1,
-      deductionPerAbsentDay: 5000,
-      deductionPerUnpaidLeaveDay: 3500,
-      allowanceItems: [
-        { id: 'trans', name: 'Transport Allowance', amount: 15000 },
-        { id: 'util', name: 'Internet & Utility Allowance', amount: 5000 },
-      ],
-    });
+  // Users are loaded from AsyncStorage (Redux no longer stores the user list)
+  const [users, setUsers] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+      setUsers(storedUsers);
+    })();
   }, []);
 
-  // Compute breakdown for currently selected user
-  const currentBreakdown = useMemo(() => {
-    if (selectedUser?.id === 'EMP-089') {
-      return aliBreakdown;
-    }
-    const base = selectedUser?.baseSalary || 140000;
+  const salaryConfig = useSelector((state) => state.salary);
+  const { logs } = useSelector((state) => state.attendance);
+  const { leaves } = useSelector((state) => state.leaves);
+
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  const monthPrefix = new Date().toISOString().slice(0, 7);
+  const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const teamMembers = useMemo(
+    () => users.filter((u) => u.role === 'EMPLOYEE' || u.role === 'MANAGER' || u.role === 'HR'),
+    [users]
+  );
+
+  const selectedUser = users.find((u) => u.id === selectedUserId) || teamMembers[0];
+
+  // Per-employee estimate derived from real attendance logs + approved leaves
+  // of the current month, using the company policy or the employee's override.
+  const getBreakdownForUser = (emp) => {
+    const cfg = salaryConfig.overrides[emp?.id] || salaryConfig.companyWide;
+    const base = emp?.baseSalary || cfg.baseSalary || cfg.baseSalaryDefault || 0;
+    const empLogs = logs.filter(
+      (l) => l.userId === emp?.id && (l.date || '').startsWith(monthPrefix)
+    );
+    const presentDays = empLogs.filter(
+      (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
+    ).length;
+    const empLeaves = leaves.filter(
+      (l) =>
+        l.userId === emp?.id &&
+        l.status === 'APPROVED' &&
+        (l.startDate || '').startsWith(monthPrefix)
+    );
+    const paidLeaveDays = empLeaves
+      .filter((l) => l.isPaid !== false)
+      .reduce((acc, l) => acc + (l.daysCount || 1), 0);
+    const unpaidLeaveDays = empLeaves
+      .filter((l) => l.isPaid === false)
+      .reduce((acc, l) => acc + (l.daysCount || 1), 0);
+
     return calculateSalaryEstimate({
       baseSalary: base,
-      workingDaysPerPeriod: 22,
-      presentDays: 21,
-      paidLeaveDays: 1,
-      unpaidLeaveDays: 0,
+      workingDaysPerPeriod: cfg.workingDaysPerPeriod,
+      presentDays,
+      paidLeaveDays,
+      unpaidLeaveDays,
       absentDays: 0,
-      deductionPerAbsentDay: 5000,
-      deductionPerUnpaidLeaveDay: 3500,
-      allowances: 20000,
+      deductionPerAbsentDay: cfg.deductionPerAbsentDay,
+      deductionPerUnpaidLeaveDay: cfg.deductionPerUnpaidLeaveDay,
     });
-  }, [selectedUser, aliBreakdown]);
+  };
 
-  // Compute total company estimated payroll (matches 436,500 PKR from blueprint)
-  const totalCompanyPayroll = useMemo(() => {
-    return 436500;
-  }, []);
+  const currentBreakdown = selectedUser ? getBreakdownForUser(selectedUser) : null;
+
+  // Total company estimated payroll = sum of every real team member's estimate
+  const totalCompanyPayroll = teamMembers.reduce(
+    (sum, emp) => sum + getBreakdownForUser(emp).netSalary,
+    0
+  );
 
   const handleRecalculateAll = () => {
     setIsCalculating(true);
     setTimeout(() => {
       setIsCalculating(false);
-      Alert.alert('Recalculation Complete', 'All 24 workforce salary estimates synchronized.');
-    }, 600);
+      Alert.alert(
+        'Payroll Synchronized',
+        `All ${teamMembers.length} workforce salary records recalculated for ${monthLabel}.`
+      );
+    }, 500);
   };
 
   // Syllabus Requirement: Featured Audit as ListHeaderComponent
   const renderListHeader = () => (
     <View style={styles.headerContainer}>
-      {/* Month & Recalculate Bar */}
+      {/* Control Bar */}
       <View style={[styles.controlRow, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
         <View style={styles.monthBadge}>
           <Icon name="calendar" size={16} color={palette.primary} />
-          <Text style={[styles.monthText, { color: palette.textPrimary }]}>{selectedMonth}</Text>
+          <Text style={[styles.monthText, { color: palette.textPrimary }]}>{monthLabel} Cycle</Text>
         </View>
 
         <TouchableOpacity
@@ -105,105 +127,111 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
       </View>
 
       {/* Featured Audit Card for selected user */}
-      <View style={[styles.featuredAuditCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-        <View style={styles.featuredBadgeRow}>
-          <View style={[styles.auditTag, { backgroundColor: palette.badge }]}>
-            <Text style={[styles.auditTagText, { color: palette.text }]}>FEATURED AUDIT • OCTOBER 2026</Text>
+      {selectedUser && currentBreakdown ? (
+        <View style={[styles.featuredAuditCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
+          <View style={styles.featuredBadgeRow}>
+            <View style={[styles.auditTag, { backgroundColor: palette.badge }]}>
+              <Text style={[styles.auditTagText, { color: palette.text }]}>
+                {`FEATURED AUDIT • ${monthLabel.toUpperCase()}`}
+              </Text>
+            </View>
+            <Text style={[styles.empIdTag, { color: palette.textSecondary }]}>
+              {selectedUser?.id}
+            </Text>
           </View>
-          <Text style={[styles.empIdTag, { color: palette.textSecondary }]}>
-            {selectedUser?.id}
+
+          <Text style={[styles.featuredEmpName, { color: palette.textPrimary }]}>
+            {selectedUser?.name}
+          </Text>
+          <Text style={[styles.featuredEmpTitle, { color: palette.textSecondary }]}>
+            {selectedUser?.title}{selectedUser?.department ? ` • ${selectedUser.department}` : ''}
+          </Text>
+
+          {/* Days Telemetry Strip */}
+          <View style={styles.telemetryStrip}>
+            <View style={styles.telemetryBlock}>
+              <Text style={[styles.telemetryVal, { color: '#16A34A' }]}>
+                {currentBreakdown.presentDays}d
+              </Text>
+              <Text style={styles.telemetrySub}>Present</Text>
+            </View>
+            <View style={styles.telemetryBlock}>
+              <Text style={[styles.telemetryVal, { color: '#2563EB' }]}>
+                {currentBreakdown.paidLeaveDays}d
+              </Text>
+              <Text style={styles.telemetrySub}>Paid Leave</Text>
+            </View>
+            <View style={styles.telemetryBlock}>
+              <Text style={[styles.telemetryVal, { color: '#D97706' }]}>
+                {currentBreakdown.unpaidLeaveDays}d
+              </Text>
+              <Text style={styles.telemetrySub}>Unpaid Lv</Text>
+            </View>
+            <View style={styles.telemetryBlock}>
+              <Text style={[styles.telemetryVal, { color: '#DC2626' }]}>
+                {currentBreakdown.unexcusedAbsentDays}d
+              </Text>
+              <Text style={styles.telemetrySub}>Absent</Text>
+            </View>
+          </View>
+
+          {/* Itemized Calculations */}
+          <View style={styles.calcRowsWrap}>
+            <View style={styles.calcRow}>
+              <Text style={[styles.calcLabel, { color: palette.textSecondary }]}>Base Monthly Salary:</Text>
+              <Text style={[styles.calcValue, { color: palette.textPrimary }]}>
+                {formatCurrency(currentBreakdown.baseSalary)}
+              </Text>
+            </View>
+
+            <View style={styles.calcRow}>
+              <Text style={[styles.calcLabel, { color: '#DC2626' }]}>
+                Itemized Deductions ({currentBreakdown.unexcusedAbsentDays}d absent + {currentBreakdown.unpaidLeaveDays}d unpaid):
+              </Text>
+              <Text style={[styles.calcValue, { color: '#DC2626' }]}>
+                -{formatCurrency(currentBreakdown.totalDeductions)}
+              </Text>
+            </View>
+
+            <View style={[styles.netTotalBox, { backgroundColor: palette.badge }]}>
+              <Text style={[styles.netTotalLabel, { color: palette.text }]}>ESTIMATED NET PAYOUT:</Text>
+              <Text style={[styles.netTotalValue, { color: palette.text }]}>
+                {formatCurrency(currentBreakdown.netSalary)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.cardActionsRow}>
+            <TouchableOpacity
+              style={[styles.outlineBtn, { borderColor: palette.primary }]}
+              onPress={() =>
+                Alert.alert(
+                  'Export PDF',
+                  `Official Payslip PDF exported for ${selectedUser?.name} (${monthLabel}).`
+                )
+              }
+            >
+              <Icon name="document-text" size={14} color={palette.primary} />
+              <Text style={[styles.outlineBtnText, { color: palette.primary }]}>Export PDF</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.lockBtn, { backgroundColor: palette.primary }]}
+              onPress={() => Alert.alert('Locked', `Salary estimate locked for approval.`)}
+            >
+              <Icon name="lock-closed" size={14} color="#FFFFFF" />
+              <Text style={styles.lockBtnText}>Lock Approval</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <View style={[styles.featuredAuditCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
+          <Text style={[styles.featuredEmpTitle, { color: palette.textSecondary }]}>
+            No employees found. Ask your Company Admin to create employee accounts to run payroll.
           </Text>
         </View>
-
-        <Text style={[styles.featuredEmpName, { color: palette.textPrimary }]}>
-          {selectedUser?.name}
-        </Text>
-        <Text style={[styles.featuredEmpTitle, { color: palette.textSecondary }]}>
-          {selectedUser?.title} • {selectedUser?.department}
-        </Text>
-
-        {/* Days Telemetry Strip */}
-        <View style={styles.telemetryStrip}>
-          <View style={styles.telemetryBlock}>
-            <Text style={[styles.telemetryVal, { color: '#16A34A' }]}>
-              {currentBreakdown.presentDays}d
-            </Text>
-            <Text style={styles.telemetrySub}>Present</Text>
-          </View>
-          <View style={styles.telemetryBlock}>
-            <Text style={[styles.telemetryVal, { color: '#2563EB' }]}>
-              {currentBreakdown.paidLeaveDays}d
-            </Text>
-            <Text style={styles.telemetrySub}>Paid Leave</Text>
-          </View>
-          <View style={styles.telemetryBlock}>
-            <Text style={[styles.telemetryVal, { color: '#D97706' }]}>
-              {currentBreakdown.unpaidLeaveDays}d
-            </Text>
-            <Text style={styles.telemetrySub}>Unpaid Lv</Text>
-          </View>
-          <View style={styles.telemetryBlock}>
-            <Text style={[styles.telemetryVal, { color: '#DC2626' }]}>
-              {currentBreakdown.unexcusedAbsentDays}d
-            </Text>
-            <Text style={styles.telemetrySub}>Absent</Text>
-          </View>
-        </View>
-
-        {/* Itemized Calculations */}
-        <View style={styles.calcRowsWrap}>
-          <View style={styles.calcRow}>
-            <Text style={[styles.calcLabel, { color: palette.textSecondary }]}>Base Monthly Salary:</Text>
-            <Text style={[styles.calcValue, { color: palette.textPrimary }]}>
-              {formatCurrency(currentBreakdown.baseSalary)}
-            </Text>
-          </View>
-
-          <View style={styles.calcRow}>
-            <Text style={[styles.calcLabel, { color: '#DC2626' }]}>
-              Itemized Deductions ({currentBreakdown.unexcusedAbsentDays}d absent + {currentBreakdown.unpaidLeaveDays}d unpaid):
-            </Text>
-            <Text style={[styles.calcValue, { color: '#DC2626' }]}>
-              -{formatCurrency(currentBreakdown.totalDeductions)}
-            </Text>
-          </View>
-
-          <View style={styles.calcRow}>
-            <Text style={[styles.calcLabel, { color: '#16A34A' }]}>
-              Itemized Allowances (Transport + Internet):
-            </Text>
-            <Text style={[styles.calcValue, { color: '#16A34A' }]}>
-              +{formatCurrency(currentBreakdown.totalAllowances)}
-            </Text>
-          </View>
-
-          <View style={[styles.netTotalBox, { backgroundColor: palette.badge }]}>
-            <Text style={[styles.netTotalLabel, { color: palette.text }]}>ESTIMATED NET PAYOUT:</Text>
-            <Text style={[styles.netTotalValue, { color: palette.text }]}>
-              {formatCurrency(currentBreakdown.netSalary)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.cardActionsRow}>
-          <TouchableOpacity
-            style={[styles.outlineBtn, { borderColor: palette.primary }]}
-            onPress={() => Alert.alert('Export PDF', `Payslip PDF exported for ${selectedUser?.name}.`)}
-          >
-            <Icon name="document-text" size={14} color={palette.primary} />
-            <Text style={[styles.outlineBtnText, { color: palette.primary }]}>Export PDF</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.lockBtn, { backgroundColor: palette.primary }]}
-            onPress={() => Alert.alert('Locked', `Salary estimate locked for approval.`)}
-          >
-            <Icon name="lock-closed" size={14} color="#FFFFFF" />
-            <Text style={styles.lockBtnText}>Lock Approval</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      )}
 
       <Text style={[styles.queueHeading, { color: palette.textPrimary }]}>
         Team Queue (Tap to Audit Employee)
@@ -216,8 +244,12 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
     <View style={[styles.totalPayrollFooter, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
       <View style={styles.footerRow}>
         <View>
-          <Text style={[styles.footerTitle, { color: palette.textPrimary }]}>Total Company Estimated Payroll</Text>
-          <Text style={[styles.footerSubtitle, { color: palette.textSecondary }]}>Cycle: October 2026 • 24 Headcount</Text>
+          <Text style={[styles.footerTitle, { color: palette.textPrimary }]}>
+            Total Company Estimated Payroll
+          </Text>
+          <Text style={[styles.footerSubtitle, { color: palette.textSecondary }]}>
+            Cycle: {monthLabel} • {teamMembers.length} Headcount • Projected
+          </Text>
         </View>
         <Text style={[styles.footerAmount, { color: palette.primary }]}>
           {formatCurrency(totalCompanyPayroll)}
@@ -226,10 +258,9 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
     </View>
   );
 
-  const teamMembers = users.filter((u) => u.role === 'EMPLOYEE' || u.role === 'MANAGER' || u.role === 'HR');
-
   const renderItem = ({ item }) => {
-    const isSelected = item.id === selectedUserId;
+    const isSelected = item.id === selectedUser?.id;
+    const payout = getBreakdownForUser(item);
     return (
       <TouchableOpacity
         style={[
@@ -242,13 +273,16 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
         <View style={styles.queueInfo}>
           <Text style={[styles.queueName, { color: palette.textPrimary }]}>{item.name}</Text>
           <Text style={[styles.queueTitle, { color: palette.textSecondary }]}>
-            {item.title} • {item.department}
+            {item.title}{item.department ? ` • ${item.department}` : ''}
           </Text>
         </View>
         <View style={styles.queueRight}>
-          <Text style={[styles.queuePayout, { color: palette.primary }]}>
-            {formatCurrency(item.baseSalary || 150000)}
-          </Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[styles.queuePayout, { color: palette.primary }]}>
+              {formatCurrency(payout.netSalary)}
+            </Text>
+            <Text style={[styles.itemMonthStatus, { color: '#B45309' }]}>Estimate</Text>
+          </View>
           <Icon name="chevron-forward" size={16} color="#94A3B8" />
         </View>
       </TouchableOpacity>
@@ -499,6 +533,11 @@ const styles = StyleSheet.create({
   footerAmount: {
     fontSize: 18,
     fontWeight: '900',
+  },
+  itemMonthStatus: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 1,
   },
 });
 

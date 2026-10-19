@@ -10,44 +10,7 @@ export const IMAGES = {
   appLogo: require('./app_logo.png'),
   mapLahoreCampus: require('./map_lahore_campus.png'),
   telemetryCampusHub: require('./telemetry_campus_hub.jpg'),
-  evidenceSignoutSheet: require('./evidence_signout_sheet.jpg'),
 };
-
-// 4 DP Presets for Add/Edit Employee screen & role avatars
-export const AVATAR_DP_PRESETS = [
-  {
-    id: 'preset_engineering',
-    name: 'Engineering',
-    role: 'EMPLOYEE',
-    image: IMAGES.dpEmpAli,
-    label: 'Engineering (Ali Raza)',
-    accent: '#4338CA',
-  },
-  {
-    id: 'preset_hr',
-    name: 'HR',
-    role: 'HR',
-    image: IMAGES.dpHrSana,
-    label: 'HR Specialist (Sana Khan)',
-    accent: '#0F766E',
-  },
-  {
-    id: 'preset_manager',
-    name: 'Manager',
-    role: 'MANAGER',
-    image: IMAGES.dpMgrBilal,
-    label: 'Manager (Bilal Ahmed)',
-    accent: '#1D4ED8',
-  },
-  {
-    id: 'preset_executive',
-    name: 'Executive',
-    role: 'ADMIN',
-    image: IMAGES.dpAdminUsman,
-    label: 'Executive (Usman Tariq)',
-    accent: '#1E293B',
-  },
-];
 
 export const getAvatarSource = (avatarKeyOrUri) => {
   if (!avatarKeyOrUri) return IMAGES.dpEmpAli;
@@ -55,7 +18,7 @@ export const getAvatarSource = (avatarKeyOrUri) => {
     return avatarKeyOrUri;
   }
   if (typeof avatarKeyOrUri === 'string') {
-    if (avatarKeyOrUri.startsWith('http://') || avatarKeyOrUri.startsWith('https://') || avatarKeyOrUri.startsWith('data:') || avatarKeyOrUri.startsWith('file://')) {
+    if (avatarKeyOrUri.startsWith('http://') || avatarKeyOrUri.startsWith('https://') || avatarKeyOrUri.startsWith('data:') || avatarKeyOrUri.startsWith('file://') || avatarKeyOrUri.startsWith('content://')) {
       return { uri: avatarKeyOrUri };
     }
     // Check known keys

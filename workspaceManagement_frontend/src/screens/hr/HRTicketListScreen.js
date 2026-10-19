@@ -11,19 +11,20 @@ import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
-const STATUS_TABS = [
-  { id: 'ALL', label: 'All' },
-  { id: 'OPEN', label: 'Open', count: 4 },
-  { id: 'IN_PROGRESS', label: 'Progress', count: 1 },
-  { id: 'RESOLVED', label: 'Resolved', count: 18 },
-];
-
 export const HRTicketListScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
 
   const { tickets } = useSelector((state) => state.tickets);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
+
+  const countByStatus = (status) => tickets.filter((t) => t.status === status).length;
+  const STATUS_TABS = [
+    { id: 'ALL', label: 'All', count: tickets.length },
+    { id: 'OPEN', label: 'Open', count: countByStatus('OPEN') },
+    { id: 'IN_PROGRESS', label: 'Progress', count: countByStatus('IN_PROGRESS') },
+    { id: 'RESOLVED', label: 'Resolved', count: countByStatus('RESOLVED') },
+  ];
 
   const filteredTickets = tickets.filter(
     (t) => selectedStatus === 'ALL' || t.status === selectedStatus

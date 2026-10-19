@@ -19,11 +19,10 @@ import Icon from '../../components/common/Icon';
 import { isValidEmail, isValidPassword } from '../../utils/validation';
 
 export const LoginScreen = () => {
-  const { login, quickDemoLogin } = useAuth();
+  const { login } = useAuth();
   const { isDark } = useTheme();
-
-  const [email, setEmail] = useState('usman@acmetech.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberDevice, setRememberDevice] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -56,53 +55,10 @@ export const LoginScreen = () => {
   const handleForgotPassword = () => {
     Alert.alert(
       'Password Recovery',
-      'For demo & security compliance, please contact your Company Administrator (Usman Tariq) or use the Quick Demo Role Switcher below.',
+      'For account password recovery, please contact your Company Administrator.',
       [{ text: 'OK' }]
     );
   };
-
-  const demoRoles = [
-    {
-      id: 'ADM-001',
-      name: 'Usman Tariq',
-      roleSubtitle: 'Company Admin (Full Access)',
-      image: IMAGES.dpAdminUsman,
-      badgeColor: '#1E293B',
-      role: 'ADMIN',
-    },
-    {
-      id: 'HR-104',
-      name: 'Sana Khan',
-      roleSubtitle: 'HR & Payroll Specialist',
-      image: IMAGES.dpHrSana,
-      badgeColor: '#0F766E',
-      role: 'HR',
-    },
-    {
-      id: 'MGR-022',
-      name: 'Bilal Ahmed',
-      roleSubtitle: 'Engineering Manager',
-      image: IMAGES.dpMgrBilal,
-      badgeColor: '#1D4ED8',
-      role: 'MANAGER',
-    },
-    {
-      id: 'EMP-089',
-      name: 'Ali Raza',
-      roleSubtitle: 'Software Engineer II',
-      image: IMAGES.dpEmpAli,
-      badgeColor: '#4338CA',
-      role: 'EMPLOYEE',
-    },
-    {
-      id: 'CLT-501',
-      name: 'Zafar Corp (Zafar Ahmed)',
-      roleSubtitle: 'Client Representative',
-      image: IMAGES.dpClientZafar,
-      badgeColor: '#92400E',
-      role: 'CLIENT',
-    },
-  ];
 
   return (
     <KeyboardAvoidingView
@@ -120,14 +76,14 @@ export const LoginScreen = () => {
             <Image source={IMAGES.appLogo} style={styles.logoImage} resizeMode="contain" />
           </View>
           <Text style={[styles.brandTitle, isDark && styles.textWhite]}>
-            Acme Tech Solutions
+            Workforce Management System
           </Text>
           <Text style={[styles.brandSubtitle, isDark && styles.textMuted]}>
-            Workforce Management System (WMS)
+            Multi-Company Workforce Administration Platform
           </Text>
           <View style={styles.telemetryPill}>
             <View style={styles.telemetryDot} />
-            <Text style={styles.telemetryText}>Enterprise ID: WMS-PK-982 • Active Session</Text>
+            <Text style={styles.telemetryText}>Secure Enterprise Session</Text>
           </View>
         </View>
 
@@ -135,7 +91,7 @@ export const LoginScreen = () => {
         <View style={[styles.formCard, isDark && styles.formCardDark]}>
           <Text style={[styles.cardTitle, isDark && styles.textWhite]}>Sign In to Workspace</Text>
           <Text style={[styles.cardDesc, isDark && styles.textMuted]}>
-            Enter your enterprise credentials or use quick demo access
+            Enter your enterprise credentials to access your portal
           </Text>
 
           {Boolean(errorMessage) && (
@@ -152,7 +108,7 @@ export const LoginScreen = () => {
               setEmail(txt);
               if (errorMessage) setErrorMessage('');
             }}
-            placeholder="e.g. usman@acmetech.com"
+            placeholder="e.g. admin@yourcompany.com"
             keyboardType="email-address"
             autoCapitalize="none"
             returnKeyType="next"
@@ -212,41 +168,24 @@ export const LoginScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* OR Divider */}
-        <View style={styles.dividerRow}>
-          <View style={[styles.dividerLine, isDark && styles.dividerLineDark]} />
-          <Text style={[styles.dividerText, isDark && styles.textMuted]}>
-            OR QUICK DEMO ACCESS
+        {/* No Self Sign-Up Card — Accounts are issued by the WMS platform team.
+            (The old "Create Admin / User Account" registration flow was removed.
+             The Super Admin now creates Company Admin accounts from the
+             Super Admin portal.) */}
+        <View style={[styles.registerCard, isDark && styles.registerCardDark]}>
+          <View style={styles.infoIconBadge}>
+            <Icon name="shield-checkmark" size={20} color="#1E293B" />
+          </View>
+          <Text style={[styles.registerCardTitle, isDark && styles.textWhite]}>
+            Accounts Are Issued, Not Self-Registered
           </Text>
-          <View style={[styles.dividerLine, isDark && styles.dividerLineDark]} />
-        </View>
-
-        {/* Quick Demo Switcher Card List */}
-        <View style={styles.demoListContainer}>
-          {demoRoles.map((demo) => (
-            <TouchableOpacity
-              key={demo.id}
-              style={[styles.demoCard, isDark && styles.demoCardDark]}
-              onPress={() => quickDemoLogin(demo.id)}
-              activeOpacity={0.8}
-            >
-              <Image source={demo.image} style={styles.demoAvatar} />
-              <View style={styles.demoInfo}>
-                <View style={styles.demoNameRow}>
-                  <Text style={[styles.demoName, isDark && styles.textWhite]}>{demo.name}</Text>
-                  <View style={[styles.roleTag, { backgroundColor: demo.badgeColor }]}>
-                    <Text style={styles.roleTagText}>{demo.role}</Text>
-                  </View>
-                </View>
-                <Text style={[styles.demoSub, isDark && styles.textMuted]}>
-                  {demo.roleSubtitle}
-                </Text>
-              </View>
-              <View style={styles.arrowIcon}>
-                <Icon name="chevron-forward" size={18} color={demo.badgeColor} />
-              </View>
-            </TouchableOpacity>
-          ))}
+          <Text style={[styles.registerCardDesc, isDark && styles.textMuted]}>
+            WMS accounts are created by your company{'\u2019'}s Administrator.{'\n'}
+            New companies are onboarded by our Super Admin, who provisions the
+            Company Admin login. Contact{' '}
+            <Text style={styles.infoEmailText}>superadmin@wms.com</Text> to
+            register your company.
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -441,59 +380,50 @@ const styles = StyleSheet.create({
     color: '#64748B',
     letterSpacing: 0.8,
   },
-  demoListContainer: {
-    gap: 10,
-  },
-  demoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  registerCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 14,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    elevation: 1,
+    marginTop: 18,
+    alignItems: 'center',
+    elevation: 2,
   },
-  demoCardDark: {
+  registerCardDark: {
     backgroundColor: '#151D2A',
     borderColor: '#334155',
   },
-  demoAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginRight: 12,
-  },
-  demoInfo: {
-    flex: 1,
-  },
-  demoNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  demoName: {
-    fontSize: 14,
+  registerCardTitle: {
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
+    textAlign: 'center',
   },
-  roleTag: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  roleTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  demoSub: {
-    fontSize: 11,
+  registerCardDesc: {
+    fontSize: 12,
     color: '#64748B',
-    marginTop: 2,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+    lineHeight: 18,
   },
-  arrowIcon: {
-    padding: 4,
+  // Small circular badge with a shield icon above the info card title
+  infoIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  // Highlighted email address inside the info card description
+  infoEmailText: {
+    color: '#2563EB',
+    fontWeight: '700',
   },
   textWhite: {
     color: '#F8FAFC',

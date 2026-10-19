@@ -12,22 +12,18 @@ import { useSelector } from 'react-redux';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
-
-const STATUS_PILLS = [
-  { id: 'ALL', label: 'All', count: 24 },
-  { id: 'PRESENT', label: 'Present', count: 18 },
-  { id: 'OPEN', label: 'Open Session', count: 2 },
-  { id: 'ABSENT', label: 'Absent', count: 2 },
-];
+import DatePickerModal from '../../components/common/DatePickerModal';
 
 export const CompanyAttendanceScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('HR');
 
   const { logs } = useSelector((state) => state.attendance);
-  const [currentDate, setCurrentDate] = useState('Oct 15, 2026');
+  const deviceToday = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(deviceToday);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [refreshing, setRefreshing] = useState(false);
+  const [calendarVisible, setCalendarVisible] = useState(false);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -36,47 +32,88 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
     }, 700);
   }, []);
 
-  // Group logs into SectionList sections
-  const sections = useMemo(() => {
-    const presentList = logs.filter(
-      (l) => l.status === 'PRESENT' || l.statusCategory === 'PRESENT & VERIFIED'
-    );
-    const correctedList = logs.filter(
-      (l) => l.status === 'CORRECTED_PRESENT' || l.statusCategory === 'HR CORRECTED RECORDS'
-    );
-    const absentList = logs.filter(
-      (l) => l.status === 'ABSENT' || l.statusCategory === 'UNEXCUSED ABSENT'
-    );
+  const shiftDate = (dateStr, days) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + days));
+    return dt.toISOString().split('T')[0];
+  };
 
+  const dateLogs = useMemo(
+    () => logs.filter((l) => l.date === selectedDate),
+    [logs, selectedDate]
+  );
+
+  const presentList = useMemo(
+    () => dateLogs.filter((l) => l.status === 'PRESENT' || l.statusCategory === 'PRESENT & VERIFIED'),
+    [dateLogs]
+  );
+  const openSessionList = useMemo(
+    () => dateLogs.filter((l) => !l.checkOutTime && l.status === 'PRESENT'),
+    [dateLogs]
+  );
+  const correctedList = useMemo(
+    () => dateLogs.filter((l) => l.status === 'CORRECTED_PRESENT' || l.statusCategory === 'HR CORRECTED RECORDS'),
+    [dateLogs]
+  );
+  const absentList = useMemo(
+    () => dateLogs.filter((l) => l.status === 'ABSENT' || l.status === 'ON_LEAVE' || l.statusCategory === 'UNEXCUSED ABSENT'),
+    [dateLogs]
+  );
+
+  const statusPills = [
+    { id: 'ALL', label: 'All', count: dateLogs.length },
+    { id: 'PRESENT', label: 'Present', count: presentList.length },
+    { id: 'OPEN', label: 'Open Punch', count: openSessionList.length },
+    { id: 'ABSENT', label: 'Absent/Leave', count: absentList.length },
+  ];
+
+  // Group logs into SectionList sections according to selectedStatus filter
+  const sections = useMemo(() => {
     const result = [];
-    if (presentList.length > 0) {
-      result.push({
-        title: `PRESENT & VERIFIED (${presentList.length})`,
-        data: presentList,
-        accent: '#16A34A',
-      });
+    if (selectedStatus === 'ALL' || selectedStatus === 'PRESENT') {
+      if (presentList.length > 0) {
+        result.push({
+          title: `PRESENT & VERIFIED (${presentList.length})`,
+          data: presentList,
+          accent: '#16A34A',
+        });
+      }
     }
-    if (correctedList.length > 0) {
-      result.push({
-        title: `HR CORRECTED RECORDS (${correctedList.length})`,
-        data: correctedList,
-        accent: '#D97706',
-      });
+    if (selectedStatus === 'ALL' || selectedStatus === 'OPEN') {
+      if (correctedList.length > 0) {
+        result.push({
+          title: `HR CORRECTED RECORDS (${correctedList.length})`,
+          data: correctedList,
+          accent: '#D97706',
+        });
+      }
     }
-    if (absentList.length > 0) {
-      result.push({
-        title: `UNEXCUSED ABSENT (${absentList.length})`,
-        data: absentList,
-        accent: '#DC2626',
-      });
+    if (selectedStatus === 'ALL' || selectedStatus === 'ABSENT') {
+      if (absentList.length > 0) {
+        result.push({
+          title: `ABSENT & LEAVE LOGS (${absentList.length})`,
+          data: absentList,
+          accent: '#DC2626',
+        });
+      }
     }
     return result;
-  }, [logs]);
+  }, [presentList, correctedList, absentList, selectedStatus]);
+
+  const formattedDisplayDate = useMemo(() => {
+    const p = selectedDate.split('-');
+    if (p.length === 3) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const label = `${months[parseInt(p[1], 10) - 1]} ${parseInt(p[2], 10)}, ${p[0]}`;
+      return selectedDate === deviceToday ? `${label} (Today)` : label;
+    }
+    return selectedDate;
+  }, [selectedDate, deviceToday]);
 
   const handleAuditDayLog = () => {
     Alert.alert(
       'Audit Day Log Verified',
-      'All 22 attendance punch records have been validated against the 200m Lahore Campus geofence parameter.',
+      `All attendance punch records for ${selectedDate} have been validated against the 200m geofence perimeter.`,
       [{ text: 'OK' }]
     );
   };
@@ -151,30 +188,38 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
         navigation={navigation}
       />
 
-      {/* Date Stepper Bar */}
+      {/* Date Stepper Bar with Calendar Picker */}
       <View style={[styles.dateBar, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
         <TouchableOpacity
           style={styles.stepBtn}
-          onPress={() => setCurrentDate('Oct 14, 2026')}
+          onPress={() => setSelectedDate((d) => shiftDate(d, -1))}
+          accessibilityLabel="Previous Day"
         >
           <Text style={styles.stepBtnText}>&lt;</Text>
         </TouchableOpacity>
 
-        <View style={styles.dateDisplay}>
+        <TouchableOpacity
+          style={styles.dateDisplay}
+          onPress={() => setCalendarVisible(true)}
+          activeOpacity={0.7}
+          accessibilityLabel="Open Calendar Date Picker"
+        >
           <Icon name="calendar" size={16} color={palette.primary} />
-          <Text style={[styles.dateDisplayText, { color: palette.textPrimary }]}>{currentDate}</Text>
-        </View>
+          <Text style={[styles.dateDisplayText, { color: palette.textPrimary }]}>{formattedDisplayDate}</Text>
+          <Icon name="chevron-down" size={14} color={palette.textSecondary} />
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.stepBtn}
-          onPress={() => setCurrentDate('Oct 15, 2026')}
+          onPress={() => setSelectedDate((d) => shiftDate(d, 1))}
+          accessibilityLabel="Next Day"
         >
           <Text style={styles.stepBtnText}>&gt;</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.todayBtn, { backgroundColor: palette.primary }]}
-          onPress={() => setCurrentDate('Oct 15, 2026')}
+          onPress={() => setSelectedDate(deviceToday)}
         >
           <Text style={styles.todayBtnText}>Today</Text>
         </TouchableOpacity>
@@ -182,7 +227,7 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
 
       {/* Status Filter Pills */}
       <View style={styles.filterBar}>
-        {STATUS_PILLS.map((pill) => {
+        {statusPills.map((pill) => {
           const isSelected = selectedStatus === pill.id;
           return (
             <TouchableOpacity
@@ -208,6 +253,15 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
         })}
       </View>
 
+      {/* Date Picker Modal */}
+      <DatePickerModal
+        visible={calendarVisible}
+        onClose={() => setCalendarVisible(false)}
+        initialDate={selectedDate}
+        title="Filter Company Attendance by Date"
+        onSelectDate={(newDate) => setSelectedDate(newDate)}
+      />
+
       {/* Syllabus Requirement: SectionList with sticky section headers */}
       <SectionList
         sections={sections}
@@ -228,11 +282,18 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
             tintColor={palette.primary}
           />
         }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
+              No attendance punches recorded for {formattedDisplayDate}.
+            </Text>
+          </View>
+        }
         ListFooterComponent={
           <View style={[styles.footerCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
             <Icon name="checkmark-circle" size={16} color="#16A34A" />
             <Text style={[styles.footerCardText, { color: palette.textPrimary }]}>
-              Total Displayed: {logs.length} Employees • ALL RECORDS SYNCED
+              Total Displayed: {dateLogs.length} Records • ALL RECORDS SYNCED
             </Text>
           </View>
         }
@@ -397,6 +458,13 @@ const styles = StyleSheet.create({
   footerCardText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 13,
   },
   bottomBar: {
     position: 'absolute',

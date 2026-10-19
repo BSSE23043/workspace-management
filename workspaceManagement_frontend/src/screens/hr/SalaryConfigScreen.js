@@ -1,4 +1,4 @@
-import React, { useReducer, useState } from 'react';
+import React, { useReducer, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 import { updateCompanySalaryConfig, updateEmployeeSalaryOverride } from '../../store/slices/salarySlice';
 import { useTheme } from '../../context/ThemeContext';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
@@ -25,21 +26,6 @@ const salaryReducer = (state, action) => {
       nextState.dailyProRata = days > 0 ? Math.round(base / days) : 0;
       return nextState;
     }
-    case 'ADD_ALLOWANCE': {
-      return {
-        ...state,
-        allowanceItems: [
-          ...state.allowanceItems,
-          { id: `alw_${Date.now()}`, name: action.payload.name || 'Custom Allowance', amount: action.payload.amount || 5000 },
-        ],
-      };
-    }
-    case 'REMOVE_ALLOWANCE': {
-      return {
-        ...state,
-        allowanceItems: state.allowanceItems.filter((item) => item.id !== action.id),
-      };
-    }
     case 'LOAD_CONFIG': {
       const base = Number(action.payload.baseSalary || 150000);
       const days = Number(action.payload.expectedWorkingDays || action.payload.workingDaysPerPeriod || 22);
@@ -49,10 +35,6 @@ const salaryReducer = (state, action) => {
         dailyProRata: days > 0 ? Math.round(base / days) : 0,
         deductionPerAbsentDay: String(action.payload.deductionPerAbsentDay || 5000),
         deductionPerUnpaidLeaveDay: String(action.payload.deductionPerUnpaidLeaveDay || 3500),
-        allowanceItems: action.payload.allowanceItems || [
-          { id: 'alw_trans', name: 'Transport Allowance', amount: 15000 },
-          { id: 'alw_net', name: 'Internet & Utility Allowance', amount: 5000 },
-        ],
       };
     }
     default:
@@ -66,10 +48,6 @@ const initialSalaryState = {
   dailyProRata: 6818,
   deductionPerAbsentDay: '5000',
   deductionPerUnpaidLeaveDay: '3500',
-  allowanceItems: [
-    { id: 'alw_trans', name: 'Transport Allowance', amount: 15000 },
-    { id: 'alw_net', name: 'Internet & Utility Allowance', amount: 5000 },
-  ],
 };
 
 export const SalaryConfigScreen = ({ navigation }) => {
@@ -78,8 +56,24 @@ export const SalaryConfigScreen = ({ navigation }) => {
   const palette = getRolePalette('HR');
 
   const { companyWide, overrides } = useSelector((state) => state.salary);
+
+  // Users are loaded from AsyncStorage (Redux no longer stores the user list)
+  const [users, setUsers] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+      setUsers(storedUsers);
+    })();
+  }, []);
+
   const [activeScope, setActiveScope] = useState('COMPANY'); // 'COMPANY' | 'OVERRIDE'
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('EMP-089'); // Ali Raza
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+
+  const eligibleEmployees = (users || []).filter(
+    (u) => u.role === 'EMPLOYEE' || u.role === 'MANAGER'
+  );
+  const selectedEmployee =
+    eligibleEmployees.find((u) => u.id === selectedEmployeeId) || eligibleEmployees[0];
 
   // Syllabus requirement: useReducer
   const [state, dispatch] = useReducer(salaryReducer, initialSalaryState);
@@ -91,21 +85,26 @@ export const SalaryConfigScreen = ({ navigation }) => {
     isValidNumber(state.deductionPerAbsentDay) &&
     isValidNumber(state.deductionPerUnpaidLeaveDay);
 
+  const handleSelectEmployee = (emp) => {
+    setSelectedEmployeeId(emp.id);
+    const empConfig = overrides[emp.id] || {
+      ...companyWide,
+      baseSalary: emp.baseSalary || companyWide.baseSalary || 150000,
+    };
+    dispatch({ type: 'LOAD_CONFIG', payload: empConfig });
+  };
+
   const handleScopeChange = (scope) => {
     setActiveScope(scope);
     if (scope === 'COMPANY') {
       dispatch({ type: 'LOAD_CONFIG', payload: companyWide });
     } else {
-      const empConfig = overrides[selectedEmployeeId] || companyWide;
+      const empConfig = overrides[selectedEmployeeId] || {
+        ...companyWide,
+        baseSalary: selectedEmployee?.baseSalary || 150000,
+      };
       dispatch({ type: 'LOAD_CONFIG', payload: empConfig });
     }
-  };
-
-  const handleAddAllowancePrompt = () => {
-    dispatch({
-      type: 'ADD_ALLOWANCE',
-      payload: { name: 'Shift Hardship Allowance', amount: 5000 },
-    });
   };
 
   const handleSave = () => {
@@ -119,15 +118,16 @@ export const SalaryConfigScreen = ({ navigation }) => {
       workingDaysPerPeriod: parseInt(state.expectedWorkingDays, 10),
       deductionPerAbsentDay: parseInt(state.deductionPerAbsentDay, 10),
       deductionPerUnpaidLeaveDay: parseInt(state.deductionPerUnpaidLeaveDay, 10),
-      allowanceItems: state.allowanceItems,
     };
 
     if (activeScope === 'COMPANY') {
       reduxDispatch(updateCompanySalaryConfig(payload));
       Alert.alert('Saved', 'Company-wide default salary policies updated.');
+    } else if (selectedEmployee) {
+      reduxDispatch(updateEmployeeSalaryOverride({ userId: selectedEmployee.id, config: payload }));
+      Alert.alert('Saved', `Employee custom salary override updated for ${selectedEmployee.name || 'employee'}.`);
     } else {
-      reduxDispatch(updateEmployeeSalaryOverride({ userId: selectedEmployeeId, config: payload }));
-      Alert.alert('Saved', 'Employee custom salary override updated for Ali Raza.');
+      Alert.alert('No Employee Selected', 'Select an employee before saving an override.');
     }
   };
 
@@ -135,7 +135,7 @@ export const SalaryConfigScreen = ({ navigation }) => {
     <View style={[styles.container, { backgroundColor: palette.background }]}>
       <HeaderBar
         title="HR Salary & Custom Deduction"
-        subtitle="useReducer State"
+        subtitle="Policy & Compensation Control"
         showBack
         navigation={navigation}
       />
@@ -173,12 +173,52 @@ export const SalaryConfigScreen = ({ navigation }) => {
                 activeScope === 'OVERRIDE' ? { color: '#FFFFFF' } : { color: palette.textSecondary },
               ]}
             >
-              Employee Override (Ali Raza)
+              Employee Override ({selectedEmployee?.name?.split(' ')[0] || 'Individual'})
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Configuration Card */}
+        {/* Employee Selector when in OVERRIDE mode */}
+        {activeScope === 'OVERRIDE' && (
+          <View style={[styles.employeeSelectorCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
+            <View style={styles.selectorHeaderRow}>
+              <Icon name="people" size={16} color={palette.primary} />
+              <Text style={[styles.selectorTitle, { color: palette.textPrimary }]}>
+                Select Employee to Configure Overrides:
+              </Text>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.empChipsScroll}>
+              {eligibleEmployees.map((emp) => {
+                const isSelected = emp.id === selectedEmployeeId;
+                return (
+                  <TouchableOpacity
+                    key={emp.id}
+                    style={[
+                      styles.empChip,
+                      { borderColor: isSelected ? palette.primary : palette.cardBorder },
+                      isSelected && { backgroundColor: palette.badge, borderWidth: 1.5 },
+                    ]}
+                    onPress={() => handleSelectEmployee(emp)}
+                  >
+                    <View style={styles.empChipTop}>
+                      <Text style={[styles.empChipName, { color: palette.textPrimary, fontWeight: isSelected ? '800' : '600' }]}>
+                        {emp.name}
+                      </Text>
+                      {isSelected && <Icon name="checkmark-circle" size={14} color={palette.primary} />}
+                    </View>
+                    <Text style={[styles.empChipSub, { color: palette.textSecondary }]}>
+                      {emp.id}{emp.department ? ` • ${emp.department}` : ''}
+                    </Text>
+                    <Text style={[styles.empChipSalary, { color: palette.primary }]}>
+                      Base: PKR {Number(emp.baseSalary || 150000).toLocaleString()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
             Base Earning & Pro-Rata Parameters
@@ -234,38 +274,6 @@ export const SalaryConfigScreen = ({ navigation }) => {
             keyboardType="numeric"
             placeholder="3500"
           />
-        </View>
-
-        {/* Dynamic Fixed Allowances Card */}
-        <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <View style={styles.allowanceHeaderRow}>
-            <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
-              Fixed Monthly Allowances
-            </Text>
-            <TouchableOpacity
-              style={[styles.addAllowanceBtn, { backgroundColor: palette.badge }]}
-              onPress={handleAddAllowancePrompt}
-            >
-              <Text style={[styles.addAllowanceBtnText, { color: palette.primary }]}>+ Add Allowance</Text>
-            </TouchableOpacity>
-          </View>
-
-          {state.allowanceItems.map((item) => (
-            <View key={item.id} style={[styles.allowanceRow, { borderColor: palette.cardBorder }]}>
-              <View style={styles.allowanceInfo}>
-                <Text style={[styles.allowanceName, { color: palette.textPrimary }]}>{item.name}</Text>
-                <Text style={[styles.allowanceAmount, { color: palette.textSecondary }]}>
-                  +{Number(item.amount).toLocaleString()} PKR
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => dispatch({ type: 'REMOVE_ALLOWANCE', id: item.id })}
-                style={styles.removeBtn}
-              >
-                <Icon name="trash" size={16} color="#DC2626" />
-              </TouchableOpacity>
-            </View>
-          ))}
         </View>
 
         {/* Inline Confirmation or Error banner */}
@@ -343,45 +351,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F766E',
   },
-  allowanceHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  addAllowanceBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-  },
-  addAllowanceBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  allowanceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
-  },
-  allowanceInfo: {
-    flex: 1,
-  },
-  allowanceName: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  allowanceAmount: {
-    fontSize: 12,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  removeBtn: {
-    padding: 6,
-  },
   validBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -422,6 +391,50 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  employeeSelectorCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 16,
+  },
+  selectorHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  selectorTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  empChipsScroll: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  empChip: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    minWidth: 160,
+    backgroundColor: '#F8FAFC',
+  },
+  empChipTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  empChipName: {
+    fontSize: 13,
+  },
+  empChipSub: {
+    fontSize: 10,
+    marginBottom: 4,
+  },
+  empChipSalary: {
+    fontSize: 11,
     fontWeight: '700',
   },
 });

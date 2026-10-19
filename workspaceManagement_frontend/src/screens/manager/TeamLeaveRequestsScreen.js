@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,29 +10,54 @@ import {
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { approveLeave, rejectLeave } from '../../store/slices/leavesSlice';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
-const STATUS_TABS = [
-  { id: 'PENDING', label: 'Pending Review', count: 2 },
-  { id: 'APPROVED', label: 'Approved', count: 5 },
-  { id: 'REJECTED', label: 'Rejected', count: 1 },
-];
-
 export const TeamLeaveRequestsScreen = ({ navigation }) => {
   const dispatch = useDispatch();
+  const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
   const { leaves } = useSelector((state) => state.leaves);
   const [selectedTab, setSelectedTab] = useState('PENDING');
 
+  // The team = employees whose reporting line points to this manager.
+  const [users, setUsers] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+      setUsers(storedUsers);
+    })();
+  }, []);
+
+  const teamIds = useMemo(
+    () => users.filter((u) => u.managerId === currentUser?.id).map((u) => u.id),
+    [users, currentUser]
+  );
+
+  // Only leave requests raised by this manager's team are shown here.
+  const teamLeaves = useMemo(
+    () => leaves.filter((l) => teamIds.includes(l.userId)),
+    [leaves, teamIds]
+  );
+
+  const countByStatus = (status) => teamLeaves.filter((l) => l.status === status).length;
+
+  const STATUS_TABS = [
+    { id: 'PENDING', label: 'Pending Review', count: countByStatus('PENDING') },
+    { id: 'APPROVED', label: 'Approved', count: countByStatus('APPROVED') },
+    { id: 'REJECTED', label: 'Rejected', count: countByStatus('REJECTED') },
+  ];
+
   // Comment state mapped per leave request
   const [comments, setComments] = useState({});
   const [attemptedSubmitId, setAttemptedSubmitId] = useState(null);
 
-  const filteredLeaves = leaves.filter((l) => l.status === selectedTab);
+  const filteredLeaves = teamLeaves.filter((l) => l.status === selectedTab);
 
   const handleApprove = (leave) => {
     const comment = comments[leave.id] || '';
@@ -113,7 +138,9 @@ export const TeamLeaveRequestsScreen = ({ navigation }) => {
                 </View>
                 <View style={[styles.overlapPill, { backgroundColor: '#DCFCE7' }]}>
                   <Icon name="checkmark-circle" size={12} color="#16A34A" />
-                  <Text style={styles.overlapText}>TEAM OVERLAP CHECK: Clear</Text>
+                  <Text style={styles.overlapText}>
+                    {leave.teamOverlapStatus || 'TEAM OVERLAP CHECK: Clear'}
+                  </Text>
                 </View>
               </View>
 
@@ -195,7 +222,9 @@ export const TeamLeaveRequestsScreen = ({ navigation }) => {
         {filteredLeaves.length === 0 && (
           <View style={styles.emptyWrap}>
             <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
-              No leave requests in this tab.
+              {teamIds.length === 0
+                ? 'No team members are assigned to you yet.'
+                : 'No leave requests in this tab.'}
             </Text>
           </View>
         )}

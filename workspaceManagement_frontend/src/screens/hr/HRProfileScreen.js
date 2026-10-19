@@ -13,37 +13,29 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
-import AvatarPickerModal from '../../components/common/AvatarPickerModal';
 import Icon from '../../components/common/Icon';
 import { getAvatarSource } from '../../assets/images';
+import { pickProfilePictureFromGallery } from '../../utils/imagePicker';
 
 export const HRProfileScreen = ({ navigation }) => {
-  const { currentUser, updateCurrentUserDP, logout, quickDemoLogin } = useAuth();
+  const { currentUser, updateCurrentUser, logout } = useAuth();
   const { getRolePalette, isDark, toggleTheme } = useTheme();
   const palette = getRolePalette('HR');
 
-  const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [notifyOnTickets, setNotifyOnTickets] = useState(true);
+
+  // Opens the device gallery to pick a new profile picture (DP).
+  const handleChangeDp = () => {
+    pickProfilePictureFromGallery((uri) => {
+      updateCurrentUser({ avatarKey: uri, avatarCustomUri: uri });
+    });
+  };
 
   const handleLogout = () => {
     Alert.alert('Log Out of Operations', 'Are you sure you want to exit the HR Operations session?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Log Out', style: 'destructive', onPress: () => logout() },
     ]);
-  };
-
-  const handleSwitchDemoRole = () => {
-    Alert.alert(
-      'Switch Demo Role',
-      'Choose a role to simulate:',
-      [
-        { text: 'Company Admin (Usman)', onPress: () => quickDemoLogin('ADM-001') },
-        { text: 'Manager (Bilal)', onPress: () => quickDemoLogin('MGR-022') },
-        { text: 'Employee (Ali Raza)', onPress: () => quickDemoLogin('EMP-089') },
-        { text: 'Client (Zafar Corp)', onPress: () => quickDemoLogin('CLT-501') },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
   };
 
   return (
@@ -66,7 +58,7 @@ export const HRProfileScreen = ({ navigation }) => {
             {/* Active DP change button for HR */}
             <TouchableOpacity
               style={[styles.cameraBadge, { backgroundColor: palette.primary }]}
-              onPress={() => setShowAvatarModal(true)}
+              onPress={handleChangeDp}
             >
               <Icon name="camera" size={14} color="#FFFFFF" />
             </TouchableOpacity>
@@ -77,16 +69,6 @@ export const HRProfileScreen = ({ navigation }) => {
             <Text style={styles.roleTagText}>HR & Payroll Specialist</Text>
           </View>
           <Text style={[styles.userEmail, { color: palette.textSecondary }]}>{currentUser?.email}</Text>
-
-          <TouchableOpacity
-            style={[styles.updateDpBtn, { borderColor: palette.primary }]}
-            onPress={() => setShowAvatarModal(true)}
-          >
-            <Icon name="camera" size={14} color={palette.primary} />
-            <Text style={[styles.updateDpBtnText, { color: palette.primary }]}>
-              📷 Update Display Picture
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Operational Scope 2x2 Privilege Grid */}
@@ -137,31 +119,31 @@ export const HRProfileScreen = ({ navigation }) => {
           {/* Strictly read-only locked inputs: editable={false} */}
           <AppInput
             label="Full Name"
-            value={currentUser?.name || 'Sana Khan'}
+            value={currentUser?.name || ''}
             editable={false}
           />
 
           <AppInput
             label="Work Email"
-            value={currentUser?.email || 'sana.khan@acmetech.com'}
+            value={currentUser?.email || ''}
             editable={false}
           />
 
           <AppInput
             label="Direct Extension / Mobile"
-            value={currentUser?.phone || '+92 300 7654321'}
+            value={currentUser?.phone || '—'}
             editable={false}
           />
 
           <AppInput
             label="Office Station"
-            value={currentUser?.location || 'HR Bay, 2nd Floor (Station 204)'}
+            value={currentUser?.location || '—'}
             editable={false}
           />
 
           <AppInput
             label="Emergency Contact"
-            value={currentUser?.emergencyContact || 'Dr. Asim Khan (+92 321 5554321)'}
+            value={currentUser?.emergencyContact || '—'}
             editable={false}
           />
           {/* Note: DO NOT show a "Save Profile Information" button per blueprint specification */}
@@ -201,15 +183,8 @@ export const HRProfileScreen = ({ navigation }) => {
         </View>
 
         {/* Demo Switcher & Logout */}
+        {/* Logout */}
         <View style={styles.bottomActions}>
-          <TouchableOpacity
-            style={[styles.switchRoleBtn, { borderColor: palette.cardBorder }]}
-            onPress={handleSwitchDemoRole}
-          >
-            <Icon name="people" size={16} color={palette.primary} />
-            <Text style={[styles.switchRoleText, { color: palette.primary }]}>Switch Demo Role</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.logoutBtn}
             onPress={handleLogout}
@@ -219,14 +194,6 @@ export const HRProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      <AvatarPickerModal
-        visible={showAvatarModal}
-        onClose={() => setShowAvatarModal(false)}
-        onSelectAvatar={(key) => updateCurrentUserDP(key)}
-        currentAvatar={currentUser?.avatarKey}
-        title="Update HR Display Picture"
-      />
     </View>
   );
 };
@@ -286,19 +253,6 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 12,
     marginBottom: 12,
-  },
-  updateDpBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  updateDpBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   sectionHeading: {
     fontSize: 14,

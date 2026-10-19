@@ -14,28 +14,26 @@ import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
+import DatePickerModal from '../../components/common/DatePickerModal';
 
 const CATEGORIES = ['Attendance Correction', 'Salary Issue', 'General Inquiry'];
 
-export const MyHRTicketsScreen = ({ navigation }) => {
+export const MyHRTicketsScreen = ({ navigation, isEmbedded = false }) => {
   const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
   const { tickets } = useSelector((state) => state.tickets);
-  const myTickets = tickets.filter(
-    (t) => t.userId === currentUser?.id || t.userId === 'EMP-089'
-  );
+  const myTickets = tickets.filter((t) => t.userId === currentUser?.id);
 
   const [category, setCategory] = useState('Attendance Correction');
-  const [subject, setSubject] = useState('Forgot to check out on Oct 12');
-  const [targetDate, setTargetDate] = useState('2026-10-12');
-  const [requestedIn, setRequestedIn] = useState('09:02 AM');
-  const [requestedOut, setRequestedOut] = useState('05:15 PM');
-  const [explanation, setExplanation] = useState(
-    'Checked out at security desk after network disconnected. Attached physical sign-out log.'
-  );
+  const [subject, setSubject] = useState('');
+  const [targetDate, setTargetDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [requestedIn, setRequestedIn] = useState('');
+  const [requestedOut, setRequestedOut] = useState('');
+  const [explanation, setExplanation] = useState('');
 
   const isAttendanceCorrection = category === 'Attendance Correction';
 
@@ -47,22 +45,24 @@ export const MyHRTicketsScreen = ({ navigation }) => {
 
     dispatch(
       createTicket({
-        userId: currentUser?.id || 'EMP-089',
-        userName: currentUser?.name || 'Ali Raza',
+        userId: currentUser?.id || '',
+        userName: currentUser?.name || '',
         category,
         subject: subject.trim(),
         explanation: explanation.trim(),
         date: targetDate,
-        proposedAdjustment: isAttendanceCorrection
-          ? `Out ${requestedOut} / 8h 15m Full`
-          : null,
-        evidenceName: 'security_desk_signout.jpg',
+        requestedIn: isAttendanceCorrection ? requestedIn.trim() : '',
+        requestedOut: isAttendanceCorrection ? requestedOut.trim() : '',
+        proposedAdjustment:
+          isAttendanceCorrection && requestedOut.trim()
+            ? `Out ${requestedOut.trim()} / Full Shift`
+            : null,
       })
     );
 
     Alert.alert(
       'HR Ticket Submitted',
-      'Your ticket has been placed into the HR Operations Queue (Sana Khan).'
+      'Your ticket has been placed into the HR Operations Queue.'
     );
   };
 
@@ -73,6 +73,7 @@ export const MyHRTicketsScreen = ({ navigation }) => {
         subtitle="Employee Inquiries"
         showBack
         navigation={navigation}
+        isEmbedded={isEmbedded}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -118,12 +119,21 @@ export const MyHRTicketsScreen = ({ navigation }) => {
                 </Text>
               </View>
 
-              <AppInput
-                label="Target Work Date"
-                value={targetDate}
-                onChangeText={setTargetDate}
-                placeholder="2026-10-12"
-              />
+              <Text style={[styles.fieldLabel, { color: palette.textPrimary }]}>
+                Target Work Date
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.datePickerBtn,
+                  { backgroundColor: palette.surface, borderColor: palette.inputBorder },
+                ]}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Icon name="calendar" size={16} color={palette.primary} />
+                <Text style={[styles.datePickerBtnText, { color: palette.textPrimary }]}>
+                  {targetDate || 'Select Date from Calendar'}
+                </Text>
+              </TouchableOpacity>
 
               <View style={styles.timeRow}>
                 <View style={{ flex: 1, marginRight: 8 }}>
@@ -131,7 +141,7 @@ export const MyHRTicketsScreen = ({ navigation }) => {
                     label="Requested Check-In"
                     value={requestedIn}
                     onChangeText={setRequestedIn}
-                    placeholder="09:02 AM"
+                    placeholder="09:00 AM"
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -139,16 +149,9 @@ export const MyHRTicketsScreen = ({ navigation }) => {
                     label="Requested Check-Out"
                     value={requestedOut}
                     onChangeText={setRequestedOut}
-                    placeholder="05:15 PM"
+                    placeholder="05:00 PM"
                   />
                 </View>
-              </View>
-
-              <View style={styles.mismatchAlert}>
-                <Icon name="alert-triangle" size={13} color="#D97706" />
-                <Text style={styles.mismatchAlertText}>
-                  Telemetry Mismatch: System logged 0.0h; proposed 8h 15m full shift.
-                </Text>
               </View>
             </View>
           )}
@@ -157,7 +160,7 @@ export const MyHRTicketsScreen = ({ navigation }) => {
             label="Ticket Subject"
             value={subject}
             onChangeText={setSubject}
-            placeholder="e.g. Forgot to check out on Oct 12"
+            placeholder="e.g. Forgot to check out"
           />
 
           <AppInput
@@ -168,13 +171,6 @@ export const MyHRTicketsScreen = ({ navigation }) => {
             numberOfLines={3}
             placeholder="Provide context on why punch was missed or discrepancy occurred..."
           />
-
-          {/* Attached Evidence Chip */}
-          <Text style={[styles.label, { color: palette.textPrimary }]}>Attached Physical Evidence</Text>
-          <View style={styles.attachmentChip}>
-            <Icon name="document-text" size={14} color="#0F766E" />
-            <Text style={styles.attachmentText}>security_desk_signout.jpg (Attached)</Text>
-          </View>
 
           <TouchableOpacity
             style={[styles.submitBtn, { backgroundColor: palette.primary }]}
@@ -189,6 +185,11 @@ export const MyHRTicketsScreen = ({ navigation }) => {
         <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
           Ticket History &amp; Logs
         </Text>
+        {myTickets.length === 0 ? (
+          <Text style={[styles.emptyHistoryText, { color: palette.textSecondary }]}>
+            No tickets submitted yet — new tickets will appear here.
+          </Text>
+        ) : null}
         {myTickets.map((t) => (
           <View
             key={t.id}
@@ -226,6 +227,14 @@ export const MyHRTicketsScreen = ({ navigation }) => {
           </View>
         ))}
       </ScrollView>
+
+      <DatePickerModal
+        visible={showDatePicker}
+        initialDate={targetDate}
+        onSelectDate={(date) => setTargetDate(date)}
+        onClose={() => setShowDatePicker(false)}
+        title="Select Target Work Date"
+      />
     </View>
   );
 };
@@ -289,36 +298,6 @@ const styles = StyleSheet.create({
   timeRow: {
     flexDirection: 'row',
   },
-  mismatchAlert: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FEF3C7',
-    padding: 8,
-    borderRadius: 6,
-    marginTop: 4,
-  },
-  mismatchAlertText: {
-    fontSize: 11,
-    color: '#92400E',
-    fontWeight: '600',
-  },
-  attachmentChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0FDFA',
-    borderWidth: 1,
-    borderColor: '#99F6E4',
-    padding: 8,
-    borderRadius: 6,
-    gap: 6,
-    marginBottom: 14,
-  },
-  attachmentText: {
-    fontSize: 11,
-    color: '#0F766E',
-    fontWeight: '600',
-  },
   submitBtn: {
     borderRadius: 8,
     paddingVertical: 12,
@@ -332,6 +311,10 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 14,
     fontWeight: '700',
+    marginBottom: 10,
+  },
+  emptyHistoryText: {
+    fontSize: 12,
     marginBottom: 10,
   },
   ticketCard: {
@@ -381,6 +364,25 @@ const styles = StyleSheet.create({
   overrideSyncText: {
     fontSize: 11,
     color: '#0F766E',
+    fontWeight: '600',
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  datePickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  datePickerBtnText: {
+    fontSize: 13,
     fontWeight: '600',
   },
 });

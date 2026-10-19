@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,60 +7,176 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Modal,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { addTaskLog, updateTaskStatus } from '../../store/slices/tasksSlice';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import {
+  loadTasks,
+  addTaskLog,
+  updateTaskStatus,
+  editTask,
+  toggleMilestoneSync,
+} from '../../services/taskService';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
+import DatePickerModal from '../../components/common/DatePickerModal';
+
+const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 export const TaskDetailScreen = ({ navigation, route }) => {
-  const dispatch = useDispatch();
+  const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
-  const taskId = route?.params?.taskId || 'TSK-408';
-  const { tasks } = useSelector((state) => state.tasks);
+  const taskId = route?.params?.taskId;
+
+  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // refresh on focus so edits made here always show the latest saved data.
+  const [tasks, setTasks] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  useEffect(() => {
+    const load = async () => {
+      setTasks(await loadTasks());
+      setIsDataLoaded(true);
+    };
+    load();
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => unsubscribe();
+  }, [navigation]);
+
   const task = tasks.find((t) => t.id === taskId) || tasks[0];
+
+  // Users are loaded from AsyncStorage (Redux no longer stores the user list)
+  const [users, setUsers] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+      setUsers(storedUsers);
+    })();
+  }, []);
+
+  // Engineers assignable by this manager = their own direct reports.
+  const engineers = users.filter((u) => u.managerId === currentUser?.id);
 
   const [managerNote, setManagerNote] = useState('');
 
-  const intDate = new Date(task?.internalDeadline || '2026-10-22');
-  const cliDate = new Date(task?.clientDeadline || '2026-10-25');
+  // Default edit dates use the current date instead of hardcoded demo dates.
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Edit Task Modal State
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [editTitle, setEditTitle] = useState(task?.title || '');
+  const [editDesc, setEditDesc] = useState(task?.description || '');
+  const [editPriority, setEditPriority] = useState(task?.priority || 'MEDIUM');
+  const [editInternalDeadline, setEditInternalDeadline] = useState(task?.internalDeadline || todayStr);
+  const [editClientDeadline, setEditClientDeadline] = useState(task?.clientDeadline || todayStr);
+  const [editAssignedIds, setEditAssignedIds] = useState(
+    task?.assignedToIds || (task?.assignedToId ? [task.assignedToId] : [])
+  );
+  const [calendarField, setCalendarField] = useState(null);
+
+  const intDate = new Date(task?.internalDeadline || todayStr);
+  const cliDate = new Date(task?.clientDeadline || todayStr);
   const diffDays = Math.round((cliDate.getTime() - intDate.getTime()) / (1000 * 60 * 60 * 24));
   const hasConflict = diffDays < 0;
 
-  const handlePostNote = () => {
+  const handlePostNote = async () => {
     if (!managerNote.trim()) return;
-    dispatch(
-      addTaskLog({
-        taskId: task.id,
-        note: `Manager Note: ${managerNote.trim()}`,
-      })
-    );
+    const nextTasks = await addTaskLog({
+      taskId: task.id,
+      note: `Manager Note: ${managerNote.trim()}`,
+    });
+    setTasks(nextTasks);
     setManagerNote('');
     Alert.alert('Note Posted', 'Manager progress note attached to task timeline.');
   };
 
-  const handleSyncMilestone = () => {
-    dispatch(
-      updateTaskStatus({
+  const handleToggleSyncMilestone = async () => {
+    const nextState = !task?.isMilestoneSynced;
+    // Both writes are sequential on purpose: each service call re-reads the
+    // saved list, so the second one must run after the first one has finished.
+    let nextTasks = await toggleMilestoneSync({ taskId: task.id, isSynced: nextState });
+    if (nextState) {
+      nextTasks = await updateTaskStatus({
         taskId: task.id,
         status: 'COMPLETED',
         progressPercent: 100,
         note: 'Task marked ready for Client Milestone Sync by Engineering Manager.',
-      })
-    );
-    Alert.alert(
-      'Milestone Synced',
-      `Task ${task.code} marked 100% complete and synchronized with Client Deliverables.`
-    );
+      });
+      Alert.alert(
+        'Milestone Synced',
+        `Task ${task.code} marked ready and synchronized with Client Deliverables.`
+      );
+    } else {
+      nextTasks = await updateTaskStatus({
+        taskId: task.id,
+        status: 'IN_PROGRESS',
+        progressPercent: 75,
+        note: 'Client Milestone Sync reverted by Engineering Manager.',
+      });
+      Alert.alert(
+        'Milestone Sync Reverted',
+        `Task ${task.code} sync status has been un-marked and returned to In Progress.`
+      );
+    }
+    setTasks(nextTasks);
   };
+
+  const handleSaveEdit = async () => {
+    if (!editTitle.trim()) {
+      Alert.alert('Validation Error', 'Task title cannot be empty.');
+      return;
+    }
+    const selectedEngs = engineers.filter((e) => editAssignedIds.includes(e.id));
+    const names = selectedEngs.map((e) => e.name);
+
+    const nextTasks = await editTask({
+      taskId: task.id,
+      title: editTitle.trim(),
+      description: editDesc.trim(),
+      priority: editPriority,
+      internalDeadline: editInternalDeadline,
+      clientDeadline: editClientDeadline,
+      assignedToIds: editAssignedIds,
+      assignedToNames: names,
+    });
+    setTasks(nextTasks);
+    setIsEditModalVisible(false);
+    Alert.alert('Task Updated', `Task ${task.code} details saved successfully.`);
+  };
+
+  // Wait for the first AsyncStorage read before rendering anything.
+  if (!isDataLoaded) {
+    return <View style={[styles.container, { backgroundColor: palette.background }]} />;
+  }
+
+  // Tasks list can be empty now (fresh install, nothing created yet) — show a
+  // friendly message instead of crashing on a missing task.
+  if (!task) {
+    return (
+      <View style={[styles.container, { backgroundColor: palette.background }]}>
+        <HeaderBar
+          title="Task Detail"
+          subtitle="Task Detail & Audit"
+          showBack
+          navigation={navigation}
+        />
+        <View style={styles.notFoundBox}>
+          <Text style={{ color: palette.textSecondary, textAlign: 'center' }}>
+            This task no longer exists or has not been assigned yet.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
       <HeaderBar
-        title={task?.code || '#TSK-408'}
+        title={task?.code || 'Task Detail'}
         subtitle="Task Detail & Audit"
         showBack
         navigation={navigation}
@@ -71,8 +187,28 @@ export const TaskDetailScreen = ({ navigation, route }) => {
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <View style={styles.codeRow}>
             <Text style={[styles.taskCode, { color: palette.primary }]}>{task?.code}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: palette.badge }]}>
-              <Text style={[styles.statusBadgeText, { color: palette.primary }]}>{task?.status}</Text>
+            <View style={styles.codeRowRight}>
+              <View style={[styles.statusBadge, { backgroundColor: palette.badge }]}>
+                <Text style={[styles.statusBadgeText, { color: palette.primary }]}>{task?.status}</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.editTaskHeaderBtn, { borderColor: palette.primary }]}
+                onPress={() => {
+                  setEditTitle(task?.title || '');
+                  setEditDesc(task?.description || '');
+                  setEditPriority(task?.priority || 'MEDIUM');
+                  setEditInternalDeadline(task?.internalDeadline || todayStr);
+                  setEditClientDeadline(task?.clientDeadline || todayStr);
+                  setEditAssignedIds(
+                    task?.assignedToIds || (task?.assignedToId ? [task.assignedToId] : [])
+                  );
+                  setIsEditModalVisible(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Icon name="create" size={13} color={palette.primary} />
+                <Text style={[styles.editTaskHeaderBtnText, { color: palette.primary }]}>Edit Task</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -82,7 +218,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
           <View style={styles.assigneeRow}>
             <Icon name="person" size={14} color="#64748B" />
             <Text style={[styles.assigneeText, { color: palette.textPrimary }]}>
-              Assigned Engineer: {task?.assignedToName} ({task?.assignedToId})
+              Assigned: {task?.assignedToNames ? task.assignedToNames.join(', ') : (task?.assignedToName || 'Unassigned')}
             </Text>
           </View>
         </View>
@@ -165,15 +301,197 @@ export const TaskDetailScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* Milestone Sync Action Button */}
-        <TouchableOpacity
-          style={[styles.syncBtn, { backgroundColor: palette.primary }]}
-          onPress={handleSyncMilestone}
-          activeOpacity={0.85}
+        {/* Milestone Sync Actions */}
+        {task?.isMilestoneSynced ? (
+          <View style={styles.syncedContainer}>
+            <View style={[styles.syncedBanner, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]}>
+              <Icon name="checkmark-done" size={20} color="#16A34A" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.syncedBannerTitle}>✓ Synced with Client Milestone</Text>
+                <Text style={styles.syncedBannerSub}>
+                  Task is synchronized with external client deliverable stream.
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.revertSyncBtn, { borderColor: '#DC2626', backgroundColor: palette.card }]}
+              onPress={handleToggleSyncMilestone}
+              activeOpacity={0.85}
+            >
+              <Icon name="refresh" size={16} color="#DC2626" />
+              <Text style={styles.revertSyncBtnText}>Revert Milestone Sync (Unmark)</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.syncBtn, { backgroundColor: palette.primary }]}
+            onPress={handleToggleSyncMilestone}
+            activeOpacity={0.85}
+          >
+            <Icon name="checkmark-done" size={18} color="#FFFFFF" />
+            <Text style={styles.syncBtnText}>Mark Ready for Client Milestone Sync</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Edit Task Modal */}
+        <Modal
+          visible={isEditModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setIsEditModalVisible(false)}
         >
-          <Icon name="checkmark-done" size={18} color="#FFFFFF" />
-          <Text style={styles.syncBtnText}>Mark Ready for Client Milestone Sync</Text>
-        </TouchableOpacity>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { backgroundColor: palette.surface, borderColor: palette.cardBorder }]}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={[styles.modalTitle, { color: palette.textPrimary }]}>Edit Task Parameters</Text>
+                  <Text style={[styles.modalSubtitle, { color: palette.textSecondary }]}>
+                    {task.code} • Update title, deadlines, assignees
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setIsEditModalVisible(false)}>
+                  <Icon name="close" size={22} color={palette.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+                <AppInput
+                  label="Task Title *"
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                />
+
+                <AppInput
+                  label="Task Description"
+                  value={editDesc}
+                  onChangeText={setEditDesc}
+                  multiline
+                  numberOfLines={2}
+                />
+
+                {/* Priority Selection */}
+                <Text style={[styles.formLabel, { color: palette.textPrimary, marginTop: 8 }]}>Priority</Text>
+                <View style={styles.chipsWrap}>
+                  {PRIORITIES.map((p) => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[
+                        styles.selectChip,
+                        { borderColor: palette.cardBorder },
+                        editPriority === p && { backgroundColor: palette.primary, borderColor: palette.primary },
+                      ]}
+                      onPress={() => setEditPriority(p)}
+                    >
+                      <Text
+                        style={[
+                          styles.selectChipText,
+                          editPriority === p ? { color: '#FFFFFF' } : { color: palette.textPrimary },
+                        ]}
+                      >
+                        {p}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Assignees Selection */}
+                <Text style={[styles.formLabel, { color: palette.textPrimary, marginTop: 10 }]}>
+                  Assign To Engineers ({editAssignedIds.length} selected)
+                </Text>
+                <View style={styles.chipsWrap}>
+                  {engineers.map((eng) => {
+                    const isSelected = editAssignedIds.includes(eng.id);
+                    return (
+                      <TouchableOpacity
+                        key={eng.id}
+                        style={[
+                          styles.selectChip,
+                          { borderColor: palette.cardBorder },
+                          isSelected && { backgroundColor: palette.primary, borderColor: palette.primary },
+                        ]}
+                        onPress={() => {
+                          if (isSelected) {
+                            if (editAssignedIds.length > 1) {
+                              setEditAssignedIds(editAssignedIds.filter((id) => id !== eng.id));
+                            }
+                          } else {
+                            setEditAssignedIds([...editAssignedIds, eng.id]);
+                          }
+                        }}
+                      >
+                        {isSelected && <Icon name="checkmark" size={13} color="#FFFFFF" />}
+                        <Text
+                          style={[
+                            styles.selectChipText,
+                            isSelected ? { color: '#FFFFFF' } : { color: palette.textPrimary },
+                          ]}
+                        >
+                          {eng.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Deadlines with Calendar Picker */}
+                <View style={styles.modalDatesRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>Internal Due</Text>
+                    <TouchableOpacity
+                      style={[styles.dateBtn, { backgroundColor: palette.background, borderColor: palette.inputBorder }]}
+                      onPress={() => setCalendarField('internal')}
+                    >
+                      <Icon name="calendar" size={15} color={palette.primary} />
+                      <Text style={[styles.dateBtnText, { color: palette.textPrimary }]}>{editInternalDeadline}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>Client Due</Text>
+                    <TouchableOpacity
+                      style={[styles.dateBtn, { backgroundColor: palette.background, borderColor: palette.inputBorder }]}
+                      onPress={() => setCalendarField('client')}
+                    >
+                      <Icon name="calendar" size={15} color={palette.primary} />
+                      <Text style={[styles.dateBtnText, { color: palette.textPrimary }]}>{editClientDeadline}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+
+              <View style={styles.modalActionsRow}>
+                <TouchableOpacity
+                  style={[styles.modalCancelBtn, { borderColor: palette.cardBorder }]}
+                  onPress={() => setIsEditModalVisible(false)}
+                >
+                  <Text style={[styles.modalCancelBtnText, { color: palette.textSecondary }]}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalSaveBtn, { backgroundColor: palette.primary }]}
+                  onPress={handleSaveEdit}
+                >
+                  <Text style={styles.modalSaveBtnText}>Save Changes</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* DatePickerModal for Task Deadlines */}
+        <DatePickerModal
+          visible={calendarField !== null}
+          onClose={() => setCalendarField(null)}
+          initialDate={calendarField === 'internal' ? editInternalDeadline : editClientDeadline}
+          title={calendarField === 'internal' ? 'Select Internal Due Date' : 'Select Client Due Date'}
+          onSelectDate={(newDate) => {
+            if (calendarField === 'internal') {
+              setEditInternalDeadline(newDate);
+            } else {
+              setEditClientDeadline(newDate);
+            }
+          }}
+        />
       </ScrollView>
     </View>
   );
@@ -182,6 +500,12 @@ export const TaskDetailScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  notFoundBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
   scrollContent: {
     padding: 16,
@@ -349,6 +673,163 @@ const styles = StyleSheet.create({
   syncBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  codeRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editTaskHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    gap: 4,
+  },
+  editTaskHeaderBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  syncedContainer: {
+    gap: 10,
+    marginBottom: 10,
+  },
+  syncedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+  },
+  syncedBannerTitle: {
+    color: '#16A34A',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  syncedBannerSub: {
+    color: '#15803D',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  revertSyncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    gap: 6,
+  },
+  revertSyncBtnText: {
+    color: '#DC2626',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  formLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  selectChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+  },
+  selectChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  modalDatesRow: {
+    flexDirection: 'row',
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  dateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+  },
+  dateBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  modalCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modalSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalSaveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
   },
 });

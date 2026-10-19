@@ -13,23 +13,29 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
-import AvatarPickerModal from '../../components/common/AvatarPickerModal';
 import Icon from '../../components/common/Icon';
 import { getAvatarSource } from '../../assets/images';
+import { pickProfilePictureFromGallery } from '../../utils/imagePicker';
 
 export const AdminProfileScreen = ({ navigation }) => {
-  const { currentUser, updateAdminProfile, updateCurrentUserDP, logout } = useAuth();
+  const { currentUser, updateCurrentUser, logout } = useAuth();
   const { getRolePalette, isDark, toggleTheme } = useTheme();
   const palette = getRolePalette('ADMIN');
 
-  const [name, setName] = useState(currentUser?.name || 'Usman Tariq');
-  const [title, setTitle] = useState(currentUser?.title || 'Lead Platform Architect & Admin');
-  const [phone, setPhone] = useState(currentUser?.phone || '+92 300 9876543');
-  const [location, setLocation] = useState(currentUser?.location || 'HQ - Islamabad, 4th Floor');
-  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [name, setName] = useState(currentUser?.name || '');
+  const [title, setTitle] = useState(currentUser?.title || '');
+  const [phone, setPhone] = useState(currentUser?.phone || '');
+  const [location, setLocation] = useState(currentUser?.location || '');
+
+  // Opens the device gallery to pick a new profile picture (DP).
+  const handleChangeDp = () => {
+    pickProfilePictureFromGallery((uri) => {
+      updateCurrentUser({ avatarKey: uri, avatarCustomUri: uri });
+    });
+  };
 
   const handleSaveProfile = async () => {
-    const res = await updateAdminProfile({
+    const res = await updateCurrentUser({
       name,
       title,
       phone,
@@ -67,7 +73,7 @@ export const AdminProfileScreen = ({ navigation }) => {
             />
             <TouchableOpacity
               style={[styles.cameraBadge, { backgroundColor: palette.primary }]}
-              onPress={() => setShowAvatarModal(true)}
+              onPress={handleChangeDp}
             >
               <Icon name="camera" size={14} color="#FFFFFF" />
             </TouchableOpacity>
@@ -78,16 +84,6 @@ export const AdminProfileScreen = ({ navigation }) => {
             <Text style={styles.roleTagText}>Company Administrator (Full Access)</Text>
           </View>
           <Text style={[styles.userEmail, { color: palette.textSecondary }]}>{currentUser?.email}</Text>
-
-          <TouchableOpacity
-            style={[styles.changePhotoBtn, { borderColor: palette.cardBorder }]}
-            onPress={() => setShowAvatarModal(true)}
-          >
-            <Icon name="camera" size={14} color={palette.textPrimary} />
-            <Text style={[styles.changePhotoText, { color: palette.textPrimary }]}>
-              Change Profile Photo (DP)
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Editable Profile Information Form */}
@@ -167,13 +163,6 @@ export const AdminProfileScreen = ({ navigation }) => {
           <Text style={styles.logoutBtnText}>Sign Out of Admin Session</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      <AvatarPickerModal
-        visible={showAvatarModal}
-        onClose={() => setShowAvatarModal(false)}
-        onSelectAvatar={(key) => updateCurrentUserDP(key)}
-        currentAvatar={currentUser?.avatarKey}
-      />
     </View>
   );
 };
@@ -233,19 +222,6 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 12,
     marginBottom: 14,
-  },
-  changePhotoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  changePhotoText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   card: {
     borderRadius: 14,

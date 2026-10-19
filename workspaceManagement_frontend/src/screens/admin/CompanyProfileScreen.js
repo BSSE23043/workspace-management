@@ -7,14 +7,24 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Modal,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { updateCompanyProfile } from '../../store/slices/companySlice';
 import { useTheme } from '../../context/ThemeContext';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
 import { IMAGES } from '../../assets/images';
+
+// Quick coordinate presets for common cities (just geographic shortcuts —
+// not tied to any particular demo company)
+const CAMPUS_PRESETS = [
+  { name: 'Lahore', lat: 31.5204, lng: 74.3587, radius: 200 },
+  { name: 'Islamabad', lat: 33.7294, lng: 73.0931, radius: 150 },
+  { name: 'Karachi', lat: 24.8138, lng: 67.03, radius: 250 },
+];
 
 const ALL_DAYS = [
   { key: 'M', label: 'Mon' },
@@ -32,6 +42,7 @@ export const CompanyProfileScreen = ({ navigation }) => {
   const { getRolePalette, isDark } = useTheme();
   const palette = getRolePalette('ADMIN');
 
+  const [mapModalVisible, setMapModalVisible] = useState(false);
   const [name, setName] = useState(company.name);
   const [timezone, setTimezone] = useState(company.timezone);
   const [workingDays, setWorkingDays] = useState(['M', 'T1', 'W', 'T2', 'F']);
@@ -58,18 +69,20 @@ export const CompanyProfileScreen = ({ navigation }) => {
   };
 
   const handleSave = () => {
-    dispatch(
-      updateCompanyProfile({
-        name,
-        timezone,
-        latitude: parseFloat(latitude) || 31.5204,
-        longitude: parseFloat(longitude) || 74.3587,
-        geofenceRadiusMeters: parseInt(radius, 10) || 200,
-        standardWorkingDaysPerMonth: parseInt(workingDaysPerMonth, 10) || 22,
-        defaultAbsenceDeduction: parseInt(absenceDeduction, 10) || 5000,
-        defaultUnpaidLeaveDeduction: parseInt(unpaidLeaveDeduction, 10) || 3500,
-      })
-    );
+    const payload = {
+      name,
+      timezone,
+      latitude: parseFloat(latitude) || 31.5204,
+      longitude: parseFloat(longitude) || 74.3587,
+      geofenceRadiusMeters: parseInt(radius, 10) || 200,
+      standardWorkingDaysPerMonth: parseInt(workingDaysPerMonth, 10) || 22,
+      defaultAbsenceDeduction: parseInt(absenceDeduction, 10) || 5000,
+      defaultUnpaidLeaveDeduction: parseInt(unpaidLeaveDeduction, 10) || 3500,
+    };
+    // Update Redux (in-memory) and persist to AsyncStorage so the company
+    // profile survives an app reload (same pattern as the user list).
+    dispatch(updateCompanyProfile(payload));
+    storageService.setItem(STORAGE_KEYS.COMPANY, { ...company, ...payload });
     Alert.alert('Configuration Saved', 'Company profile and geofence policies updated.');
   };
 
@@ -95,7 +108,7 @@ export const CompanyProfileScreen = ({ navigation }) => {
             label="Company Name"
             value={name}
             onChangeText={setName}
-            placeholder="Acme Tech Solutions"
+            placeholder="e.g. Your Company Name"
           />
 
           <AppInput
@@ -147,7 +160,12 @@ export const CompanyProfileScreen = ({ navigation }) => {
           </Text>
 
           {/* Map Preview Container with dashed radius circle and pin */}
-          <View style={styles.mapContainer}>
+          <TouchableOpacity
+            style={styles.mapContainer}
+            onPress={() => setMapModalVisible(true)}
+            activeOpacity={0.9}
+            accessibilityLabel="Open Fullscreen Interactive Map Picker"
+          >
             <Image
               source={IMAGES.mapLahoreCampus}
               style={styles.mapImage}
@@ -155,13 +173,59 @@ export const CompanyProfileScreen = ({ navigation }) => {
             />
             {/* Dashed 200m circle overlay */}
             <View style={styles.dashedGeofenceCircle} />
-            {/* Centered Acme Tech HQ Pin */}
+            {/* Centered Company HQ Pin */}
             <View style={styles.mapPinContainer}>
               <View style={styles.pinBubble}>
-                <Text style={styles.pinBubbleText}>Acme Tech HQ</Text>
+                <Text style={styles.pinBubbleText}>Company HQ</Text>
               </View>
               <Icon name="location" size={26} color="#DC2626" />
             </View>
+            <View style={styles.tapToEditBadge}>
+              <Icon name="map" size={14} color="#FFFFFF" />
+              <Text style={styles.tapToEditText}>Tap to Open Interactive Map</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Open Map Button */}
+          <TouchableOpacity
+            style={[styles.openMapBtn, { backgroundColor: palette.primary }]}
+            onPress={() => setMapModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Icon name="map" size={16} color="#FFFFFF" />
+            <Text style={styles.openMapBtnText}>Open Interactive Map Location Picker</Text>
+          </TouchableOpacity>
+
+          {/* Quick Campus Presets */}
+          <Text style={[styles.presetLabel, { color: palette.textSecondary }]}>Quick Campus Presets:</Text>
+          <View style={styles.presetsRow}>
+            {CAMPUS_PRESETS.map((p) => {
+              const isSelected = latitude === String(p.lat) && longitude === String(p.lng);
+              return (
+                <TouchableOpacity
+                  key={p.name}
+                  style={[
+                    styles.presetChip,
+                    { borderColor: palette.cardBorder, backgroundColor: palette.background },
+                    isSelected && { borderColor: palette.primary, backgroundColor: palette.badge },
+                  ]}
+                  onPress={() => {
+                    setLatitude(String(p.lat));
+                    setLongitude(String(p.lng));
+                    setRadius(String(p.radius));
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.presetChipText,
+                      { color: isSelected ? palette.primary : palette.textPrimary },
+                    ]}
+                  >
+                    {p.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <View style={styles.coordsRow}>
@@ -194,6 +258,117 @@ export const CompanyProfileScreen = ({ navigation }) => {
             helperText="Employees must be within this radius to register attendance check-ins."
           />
         </View>
+
+        {/* Interactive Map Picker Modal */}
+        <Modal
+          visible={mapModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setMapModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { backgroundColor: palette.surface, borderColor: palette.cardBorder }]}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={[styles.modalTitle, { color: palette.textPrimary }]}>
+                    Interactive Geofence Map Picker
+                  </Text>
+                  <Text style={[styles.modalSubtitle, { color: palette.textSecondary }]}>
+                    Tap anywhere on map or choose campus preset to set geofence
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setMapModalVisible(false)}>
+                  <Icon name="close" size={22} color={palette.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Interactive Visual Map Area with Tap Detector */}
+              <TouchableOpacity
+                style={styles.interactiveMapBox}
+                activeOpacity={0.95}
+                onPress={(evt) => {
+                  const { locationX, locationY } = evt.nativeEvent;
+                  // Map relative touch coordinates into subtle coordinate adjustments
+                  const deltaLat = ((locationY - 110) / 110) * 0.005;
+                  const deltaLng = ((locationX - 150) / 150) * 0.005;
+                  const newLat = (31.5204 - deltaLat).toFixed(4);
+                  const newLng = (74.3587 + deltaLng).toFixed(4);
+                  setLatitude(String(newLat));
+                  setLongitude(String(newLng));
+                }}
+              >
+                <Image
+                  source={IMAGES.mapLahoreCampus}
+                  style={styles.modalMapImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.modalGeofenceCircle} />
+                <View style={styles.modalCenterPin}>
+                  <View style={styles.pinBubble}>
+                    <Text style={styles.pinBubbleText}>Selected Geofence Center</Text>
+                  </View>
+                  <Icon name="location" size={32} color="#DC2626" />
+                </View>
+                <View style={styles.mapHintBadge}>
+                  <Text style={styles.mapHintText}>📍 Tap map to reposition pin coordinates</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Current Active Pin Readout */}
+              <View style={[styles.coordBanner, { backgroundColor: palette.background, borderColor: palette.cardBorder }]}>
+                <View style={styles.coordCol}>
+                  <Text style={styles.coordLabel}>LATITUDE</Text>
+                  <Text style={[styles.coordVal, { color: palette.primary }]}>{latitude}</Text>
+                </View>
+                <View style={styles.coordCol}>
+                  <Text style={styles.coordLabel}>LONGITUDE</Text>
+                  <Text style={[styles.coordVal, { color: palette.primary }]}>{longitude}</Text>
+                </View>
+                <View style={styles.coordCol}>
+                  <Text style={styles.coordLabel}>RADIUS</Text>
+                  <Text style={[styles.coordVal, { color: palette.primary }]}>{radius}m</Text>
+                </View>
+              </View>
+
+              {/* Campus Presets in Modal */}
+              <Text style={[styles.presetHeading, { color: palette.textPrimary }]}>Or Select Known Campus:</Text>
+              <View style={styles.modalPresetsGrid}>
+                {CAMPUS_PRESETS.map((p) => (
+                  <TouchableOpacity
+                    key={p.name}
+                    style={[
+                      styles.modalPresetBtn,
+                      { borderColor: palette.cardBorder, backgroundColor: palette.background },
+                      latitude === String(p.lat) && { borderColor: palette.primary, backgroundColor: palette.badge },
+                    ]}
+                    onPress={() => {
+                      setLatitude(String(p.lat));
+                      setLongitude(String(p.lng));
+                      setRadius(String(p.radius));
+                    }}
+                  >
+                    <Text style={[styles.modalPresetBtnTitle, { color: palette.textPrimary }]}>{p.name}</Text>
+                    <Text style={[styles.modalPresetBtnSub, { color: palette.textSecondary }]}>
+                      {p.lat}, {p.lng} • {p.radius}m
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Apply Button */}
+              <TouchableOpacity
+                style={[styles.applyMapBtn, { backgroundColor: palette.primary }]}
+                onPress={() => {
+                  setMapModalVisible(false);
+                  Alert.alert('Map Location Applied', `Coordinates updated to (${latitude}, ${longitude}) with ${radius}m geofence.`);
+                }}
+              >
+                <Icon name="checkmark-circle" size={18} color="#FFFFFF" />
+                <Text style={styles.applyMapBtnText}>Apply Selected Map Coordinates</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         {/* Default Salary & Deduction Policy */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
@@ -326,8 +501,184 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
-  coordsRow: {
+  tapToEditBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  tapToEditText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  openMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+    marginBottom: 12,
+  },
+  openMapBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  presetLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
+  },
+  presetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+    maxWidth: 300,
+  },
+  interactiveMapBox: {
+    height: 220,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#CBD5E1',
+    marginBottom: 12,
+  },
+  modalMapImage: {
+    width: '100%',
+    height: '100%',
+  },
+  modalGeofenceCircle: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 2,
+    borderColor: '#2563EB',
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(37, 99, 235, 0.15)',
+  },
+  modalCenterPin: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  mapHintBadge: {
+    position: 'absolute',
+    bottom: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  mapHintText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  coordBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  coordCol: {
+    alignItems: 'center',
+  },
+  coordLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  coordVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  presetHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  modalPresetsGrid: {
+    gap: 6,
+    marginBottom: 14,
+  },
+  modalPresetBtn: {
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  modalPresetBtnTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  modalPresetBtnSub: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  applyMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  applyMapBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   saveBtn: {
     borderRadius: 10,

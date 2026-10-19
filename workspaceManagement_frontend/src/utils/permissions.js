@@ -1,6 +1,7 @@
 // Role Permissions & Palette Configurations
 
 export const ROLES = {
+  SUPER_ADMIN: 'SUPER_ADMIN',
   ADMIN: 'ADMIN',
   HR: 'HR',
   MANAGER: 'MANAGER',
@@ -9,6 +10,17 @@ export const ROLES = {
 };
 
 export const ROLE_THEMES = {
+  // Super Admin sits "above" the Company Admin, so we use a near-black slate
+  // that stays consistent with the existing dark-navy app theme (#1E293B).
+  SUPER_ADMIN: {
+    primary: '#0F172A', // Midnight Slate (darker than Company Admin navy)
+    secondary: '#020617',
+    light: '#F1F5F9',
+    badge: '#E2E8F0',
+    text: '#0F172A',
+    contrastText: '#FFFFFF',
+    roleLabel: 'Super Admin (Platform Owner)',
+  },
   ADMIN: {
     primary: '#1E293B', // Deep Slate Navy
     secondary: '#0F172A',
@@ -56,6 +68,7 @@ export const ROLE_THEMES = {
   },
 };
 
+export const canManageCompanyAdmins = (role) => role === ROLES.SUPER_ADMIN;
 export const canEditUserAccounts = (role) => role === ROLES.ADMIN;
 export const canEditOwnProfileFields = (role) => role === ROLES.ADMIN;
 export const canCreateRequirements = (role) => role === ROLES.MANAGER || role === ROLES.ADMIN;

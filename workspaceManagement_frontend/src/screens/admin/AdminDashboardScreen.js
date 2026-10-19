@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 
@@ -16,19 +18,43 @@ const { width } = Dimensions.get('window');
 
 export const AdminDashboardScreen = ({ navigation }) => {
   const { getRolePalette, isDark } = useTheme();
+  const { currentUser } = useAuth();
   const palette = getRolePalette('ADMIN');
 
   const company = useSelector((state) => state.company);
-  const { users, departments } = useSelector((state) => state.users);
+
+  // The real user list lives in AsyncStorage (users this admin has added +
+  // company admins created by the Super Admin).
+  // If the logged-in admin has a companyId (created by the Super Admin),
+  // we only count users of that company — so a freshly created admin
+  // starts with zero demo users from other companies.
+  const [users, setUsers] = useState([]);
+
+  const loadUsersFromStorage = async () => {
+    const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+    const scopedUsers = currentUser?.companyId
+      ? storedUsers.filter((u) => u.companyId === currentUser.companyId)
+      : storedUsers;
+    setUsers(scopedUsers);
+  };
+
+  // Load once when the screen mounts, and reload every time this screen
+  // gains focus again (e.g. after coming back from the Employee Form
+  // screen where a new user was added).
+  useEffect(() => {
+    loadUsersFromStorage();
+    const unsubscribe = navigation.addListener('focus', loadUsersFromStorage);
+    // Clean up the focus listener when the screen unmounts
+    return unsubscribe;
+  }, []);
 
   // Compute live workforce snapshot counts with useMemo
   const snapshot = useMemo(() => {
     const total = users.length;
     const active = users.filter((u) => u.isActive !== false).length;
     const deactivated = total - active;
-    const deptsCount = departments.filter((d) => d.status !== 'ARCHIVED').length;
-    return { total, active, deactivated, deptsCount };
-  }, [users, departments]);
+    return { total, active, deactivated };
+  }, [users]);
 
   const shortcuts = [
     {
@@ -38,14 +64,6 @@ export const AdminDashboardScreen = ({ navigation }) => {
       icon: 'business',
       color: '#1E293B',
       target: 'CompanyProfile',
-    },
-    {
-      id: 'dept_mgr',
-      title: 'Department Management',
-      subtitle: 'Class Component • Create, rename & archive teams',
-      icon: 'grid',
-      color: '#0F766E',
-      target: 'DepartmentManagement',
     },
     {
       id: 'emp_dir',
@@ -62,55 +80,78 @@ export const AdminDashboardScreen = ({ navigation }) => {
       <HeaderBar
         title="Admin Executive Dashboard"
         navigation={navigation}
-        statusText="SYSTEM OK"
-        statusColor="#10B981"
+        showStatus={false}
       />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Organization Card */}
-        <View style={[styles.orgCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <View style={styles.orgHeaderRow}>
-            <View>
-              <Text style={[styles.orgName, { color: palette.textPrimary }]}>{company.name}</Text>
-              <Text style={[styles.orgId, { color: palette.textSecondary }]}>
-                Enterprise ID: {company.enterpriseId}
-              </Text>
+        {/* Organization Card — shown only after the admin has set up their
+            company profile. Until then, a setup prompt is displayed instead
+            (conditional rendering with && / ternary). */}
+        {company.name ? (
+          <View style={[styles.orgCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
+            <View style={styles.orgHeaderRow}>
+              <View style={styles.flexOne}>
+                <Text style={[styles.orgName, { color: palette.textPrimary }]}>{company.name}</Text>
+                {Boolean(company.enterpriseId) && (
+                  <Text style={[styles.orgId, { color: palette.textSecondary }]}>
+                    Enterprise ID: {company.enterpriseId}
+                  </Text>
+                )}
+              </View>
             </View>
-            <View style={styles.activeOrgPill}>
-              <View style={styles.greenPulseDot} />
-              <Text style={styles.activeOrgText}>Active Org</Text>
+
+            <View style={styles.orgDetailsRow}>
+              {Boolean(company.mainCampus) && (
+                <View style={styles.orgDetailItem}>
+                  <Icon name="location" size={15} color="#1E293B" />
+                  <Text style={[styles.orgDetailText, { color: palette.textPrimary }]}>
+                    {company.mainCampus}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.orgDetailItem}>
+                <Icon name="calendar" size={15} color="#6366F1" />
+                <Text style={[styles.orgDetailText, { color: palette.textPrimary }]}>
+                  Shift Days: {company.workingDays.join('-')}
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.telemetryFooter, { borderTopColor: palette.divider }]}>
+              <Icon name="refresh" size={13} color="#64748B" />
+              <Text style={styles.telemetryFooterText}>
+                Geofence Center: Lat {company.latitude}, Lon {company.longitude}
+              </Text>
             </View>
           </View>
-
-          <View style={styles.orgDetailsRow}>
-            <View style={styles.orgDetailItem}>
-              <Icon name="location" size={15} color="#1E293B" />
-              <Text style={[styles.orgDetailText, { color: palette.textPrimary }]}>
-                {company.mainCampus}
-              </Text>
+        ) : (
+          /* Setup prompt shown to a fresh Company Admin who hasn't
+             configured their company yet */
+          <View style={[styles.orgCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
+            <View style={styles.setupIconBox}>
+              <Icon name="business" size={26} color="#1E293B" />
             </View>
-            <View style={styles.orgDetailItem}>
-              <Icon name="shield-checkmark" size={15} color="#10B981" />
-              <Text style={[styles.orgDetailText, { color: palette.textPrimary }]}>
-                {company.geofenceRadiusMeters}m Geofence Active
-              </Text>
-            </View>
-            <View style={styles.orgDetailItem}>
-              <Icon name="calendar" size={15} color="#6366F1" />
-              <Text style={[styles.orgDetailText, { color: palette.textPrimary }]}>Mon-Fri Shift</Text>
-            </View>
-          </View>
-
-          <View style={[styles.telemetryFooter, { borderTopColor: palette.divider }]}>
-            <Icon name="refresh" size={13} color="#64748B" />
-            <Text style={styles.telemetryFooterText}>
-              Real-time telemetry synced 2m ago • Lat {company.latitude}, Lon {company.longitude}
+            <Text style={[styles.setupTitle, { color: palette.textPrimary }]}>
+              Set Up Your Company Profile
             </Text>
+            <Text style={[styles.setupDesc, { color: palette.textSecondary }]}>
+              Your company details are not configured yet. Open the Company
+              Profile module to enter your company name, campus location,
+              geofence perimeter and payroll policy.
+            </Text>
+            <TouchableOpacity
+              style={styles.setupBtn}
+              onPress={() => navigation.navigate('CompanyProfile')}
+              activeOpacity={0.85}
+            >
+              <Icon name="business" size={16} color="#FFFFFF" />
+              <Text style={styles.setupBtnText}>Configure Company Profile</Text>
+            </TouchableOpacity>
           </View>
-        </View>
+        )}
 
         {/* Workforce Snapshot 2x2 Grid (Dimensions API) */}
         <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>
@@ -139,14 +180,6 @@ export const AdminDashboardScreen = ({ navigation }) => {
             </View>
             <Text style={[styles.kpiValue, { color: '#DC2626' }]}>{snapshot.deactivated}</Text>
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Deactivated</Text>
-          </View>
-
-          <View style={[styles.kpiCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-            <View style={[styles.kpiIconWrap, { backgroundColor: '#E0E7FF' }]}>
-              <Icon name="grid" size={18} color="#4338CA" />
-            </View>
-            <Text style={[styles.kpiValue, { color: '#4338CA' }]}>{snapshot.deptsCount}</Text>
-            <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Departments</Text>
           </View>
         </View>
 
@@ -177,32 +210,9 @@ export const AdminDashboardScreen = ({ navigation }) => {
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* Recent Administrative Activity */}
-        <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>
-          Recent Administrative Activity
-        </Text>
-        <View style={[styles.activityCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <View style={styles.activityItem}>
-            <View style={styles.activityDot} />
-            <View style={styles.activityInfo}>
-              <Text style={[styles.activityAction, { color: palette.textPrimary }]}>
-                Geofence Radius Verified (200m)
-              </Text>
-              <Text style={styles.activityTime}>Today • 08:30 AM • Usman Tariq</Text>
-            </View>
-          </View>
-          <View style={styles.activityDivider} />
-          <View style={styles.activityItem}>
-            <View style={[styles.activityDot, { backgroundColor: '#3B82F6' }]} />
-            <View style={styles.activityInfo}>
-              <Text style={[styles.activityAction, { color: palette.textPrimary }]}>
-                Salary Deduction Policy Confirmed (5k / 3.5k PKR)
-              </Text>
-              <Text style={styles.activityTime}>Oct 14 • 04:00 PM • Usman Tariq</Text>
-            </View>
-          </View>
-        </View>
+        {/* NOTE: The "Recent Administrative Activity" section was removed on
+            purpose — it showed hardcoded demo activity entries and is not
+            needed for real company usage. */}
       </ScrollView>
     </View>
   );
@@ -241,26 +251,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 2,
-  },
-  activeOrgPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  greenPulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#16A34A',
-    marginRight: 5,
-  },
-  activeOrgText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#16A34A',
   },
   orgDetailsRow: {
     gap: 8,
@@ -355,39 +345,42 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
-  activityCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-  },
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  activityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-  },
-  activityInfo: {
+  flexOne: {
     flex: 1,
   },
-  activityAction: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  activityTime: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  activityDivider: {
-    height: 1,
+  /* Styles for the "Set Up Your Company Profile" prompt card */
+  setupIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     backgroundColor: '#E2E8F0',
-    marginVertical: 10,
-    marginLeft: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  setupTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  setupDesc: {
+    fontSize: 12.5,
+    lineHeight: 19,
+    marginTop: 6,
+    marginBottom: 14,
+  },
+  setupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#1E293B',
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  setupBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '700',
   },
 });
 
