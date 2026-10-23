@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { DrawerActions } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
@@ -12,19 +12,13 @@ export const HeaderBar = ({
   subtitle,
   navigation,
   showBack = false,
-  onBackPress,
   rightAction,
-  onProfilePress,
-  statusText = 'ONLINE',
-  statusColor = '#10B981',
-  showStatus = true,
   isEmbedded = false,
 }) => {
   if (isEmbedded) {
     return null;
   }
 
-  const insets = useSafeAreaInsets();
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const role = currentUser?.role || 'EMPLOYEE';
@@ -32,9 +26,7 @@ export const HeaderBar = ({
   const isAdmin = role === 'ADMIN';
 
   const handleAvatarPress = () => {
-    if (onProfilePress) {
-      onProfilePress();
-    } else if (navigation) {
+    if (navigation) {
       if (role === 'SUPER_ADMIN') {
         navigation.navigate('SuperAdminProfile');
       } else if (isAdmin) {
@@ -51,42 +43,14 @@ export const HeaderBar = ({
     }
   };
 
-  // Syllabus Requirement: Status pill constructed via React.createElement
-  const statusPill = React.createElement(
-    View,
-    {
-      style: [
-        styles.statusPill,
-        {
-          borderColor: statusColor,
-          backgroundColor: statusColor + '20',
-        },
-      ],
-    },
-    React.createElement(
-      View,
-      {
-        style: [styles.statusDot, { backgroundColor: statusColor }],
-      }
-    ),
-    React.createElement(
-      Text,
-      {
-        style: [styles.statusText, { color: statusColor }],
-      },
-      statusText
-    )
-  );
-
   return (
-    <View
+    <SafeAreaView
+      edges={['top']}
       style={[
         styles.container,
         {
           backgroundColor: palette.surface,
           borderBottomColor: palette.cardBorder,
-          paddingTop: Math.max(insets.top, 12),
-          height: 60 + Math.max(insets.top, 12),
           borderTopWidth: 3,
           borderTopColor: palette.primary,
         },
@@ -96,7 +60,7 @@ export const HeaderBar = ({
         {showBack ? (
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={onBackPress || (() => navigation && navigation.goBack())}
+            onPress={() => navigation && navigation.goBack()}
             accessibilityRole="button"
             accessibilityLabel="Go Back"
           >
@@ -105,15 +69,7 @@ export const HeaderBar = ({
         ) : isAdmin ? (
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => {
-              if (navigation) {
-                if (typeof navigation.openDrawer === 'function') {
-                  navigation.openDrawer();
-                } else if (typeof navigation.dispatch === 'function') {
-                  navigation.dispatch(DrawerActions.openDrawer());
-                }
-              }
-            }}
+            onPress={() => navigation && navigation.dispatch(DrawerActions.openDrawer())}
             accessibilityRole="button"
             accessibilityLabel="Open Navigation Drawer"
           >
@@ -136,9 +92,9 @@ export const HeaderBar = ({
             </View>
           ) : (
             <View>
-              {Boolean(subtitle) && (
+              {subtitle ? (
                 <Text style={[styles.subtitle, { color: palette.primary }]}>{subtitle}</Text>
-              )}
+              ) : null}
               <Text style={[styles.title, { color: palette.textPrimary }]} numberOfLines={1}>
                 {title || 'Workforce Portal'}
               </Text>
@@ -152,8 +108,6 @@ export const HeaderBar = ({
           rightAction
         ) : showBack ? null : (
           <>
-            {/* Render the React.createElement syllabus status pill only on main screens */}
-            {showStatus && statusPill}
             <TouchableOpacity
               style={[styles.avatarButton, { borderColor: palette.primary }]}
               onPress={handleAvatarPress}
@@ -161,25 +115,25 @@ export const HeaderBar = ({
               accessibilityRole="button"
               accessibilityLabel="View Profile"
             >
-              <Image
+              {/* <Image
                 source={getAvatarSource(currentUser?.avatarKey || currentUser?.avatarCustomUri)}
                 style={styles.avatarImage}
-              />
+              /> */}
             </TouchableOpacity>
           </>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    height: 64,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     elevation: 3,
     shadowColor: '#000',
@@ -242,25 +196,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 5,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
   },
   avatarButton: {
     width: 38,

@@ -97,7 +97,6 @@ export const ManagerDashboardScreen = ({ navigation }) => {
         title="Manager Operational Dashboard"
         subtitle="Engineering Management"
         navigation={navigation}
-        showStatus={false}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

@@ -90,7 +90,6 @@ export const AdminDashboardScreen = ({ navigation }) => {
       <HeaderBar
         title="Admin Executive Dashboard"
         navigation={navigation}
-        showStatus={false}
       />
 
       <ScrollView

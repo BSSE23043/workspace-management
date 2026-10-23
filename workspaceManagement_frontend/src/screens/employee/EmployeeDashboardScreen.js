@@ -99,8 +99,6 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
         title="Employee Daily Workspace"
         subtitle="Engineering Division"
         navigation={navigation}
-        statusText="ON-PREMISE"
-        statusColor="#16A34A"
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

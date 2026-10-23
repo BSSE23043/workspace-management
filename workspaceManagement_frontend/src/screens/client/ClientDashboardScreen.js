@@ -64,7 +64,6 @@ export const ClientDashboardScreen = ({ navigation }) => {
         title="Client Executive Dashboard"
         subtitle={currentUser?.name || 'Client Portal'}
         navigation={navigation}
-        showStatus={false}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

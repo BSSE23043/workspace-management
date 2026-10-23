@@ -6,9 +6,7 @@ import { Text, View, StyleSheet } from 'react-native';
 const GLYPH_MAP = {
   // Navigation & Actions
   'menu': '☰',
-  'menu-outline': '☰',
   'arrow-back': '←',
-  'chevron-back': '‹',
   'chevron-forward': '›',
   'chevron-down': '▼',
   'chevron-up': '▲',
@@ -19,55 +17,36 @@ const GLYPH_MAP = {
   'checkmark-done': '✓✓',
   'add': '+',
   'add-circle': '⊕',
-  'remove-circle': '⊖',
   'trash': '🗑',
   'search': '🔍',
   'refresh': '↻',
 
   // Work & Dashboard
   'grid': '⊞',
-  'grid-outline': '⊞',
-  'apps': '⊞',
   'briefcase': '💼',
-  'briefcase-outline': '💼',
   'business': '🏢',
   'location': '📍',
-  'location-outline': '📍',
-  'pin': '📍',
   'map': '🗺',
   'calendar': '📅',
-  'calendar-outline': '📅',
   'time': '🕒',
-  'time-outline': '🕒',
 
   // Security & Users
   'shield-checkmark': '🛡',
   'lock-closed': '🔒',
-  'lock-closed-outline': '🔒',
-  'lock-open': '🔓',
   'eye': '👁',
   'eye-off': '👁‍🗨',
   'person': '👤',
-  'person-outline': '👤',
   'people': '👥',
-  'people-outline': '👥',
 
   // Money & Payroll
   'cash': '💵',
-  'cash-outline': '💵',
   'wallet': '👛',
-  'card': '💳',
 
   // Tickets, Tasks & Alerts
   'ticket': '🎫',
-  'ticket-outline': '🎫',
   'chatbubble-ellipses': '💬',
   'alert-triangle': '⚠️',
   'alert-circle': '⚠️',
-  'warning': '⚠️',
-  'checkmark-circle-outline': '✓',
-  'notifications': '🔔',
-  'notifications-outline': '🔔',
   'flag': '🚩',
   'camera': '📷',
   'log-out': '⎋',
@@ -86,7 +65,7 @@ export const Icon = ({ name, size = 18, color = '#1E293B', style }) => {
           {
             fontSize: size * 0.9,
             color,
-            lineHeight: size + 2,
+      
           },
         ]}
       >

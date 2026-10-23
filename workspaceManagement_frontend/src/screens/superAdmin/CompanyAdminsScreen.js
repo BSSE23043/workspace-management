@@ -195,7 +195,6 @@ export const CompanyAdminsScreen = ({ navigation }) => {
         title="Company Admins"
         subtitle="Super Admin Portal"
         navigation={navigation}
-        statusText="PLATFORM LIVE"
       />
 
       <KeyboardAvoidingView

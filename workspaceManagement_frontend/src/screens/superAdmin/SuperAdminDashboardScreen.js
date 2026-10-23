@@ -65,7 +65,6 @@ export const SuperAdminDashboardScreen = ({ navigation }) => {
         title="Platform Overview"
         subtitle="Super Admin Portal"
         navigation={navigation}
-        showStatus={false}
       />
 
       <ScrollView

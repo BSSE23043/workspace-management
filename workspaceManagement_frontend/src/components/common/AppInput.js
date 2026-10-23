@@ -13,13 +13,9 @@ export const AppInput = forwardRef(
       secureTextEntry = false,
       editable = true,
       error,
-      rightIcon,
-      onRightIconPress,
       keyboardType = 'default',
       multiline = false,
       numberOfLines = 1,
-      style,
-      inputStyle,
       helperText,
       ...props
     },
@@ -31,7 +27,7 @@ export const AppInput = forwardRef(
     const isSecure = secureTextEntry && !isPasswordVisible;
 
     return (
-      <View style={[styles.container, style]}>
+      <View style={styles.container}>
         {Boolean(label) && (
           <View style={styles.labelRow}>
             <Text style={[styles.label, isDark && styles.labelDark]}>{label}</Text>
@@ -68,7 +64,6 @@ export const AppInput = forwardRef(
               isDark ? styles.textInputDark : styles.textInputLight,
               !editable && styles.disabledText,
               multiline && styles.multilineInput,
-              inputStyle,
             ]}
             {...props}
           />
@@ -90,14 +85,6 @@ export const AppInput = forwardRef(
                 size={18}
                 color={isDark ? '#94A3B8' : '#64748B'}
               />
-            </TouchableOpacity>
-          ) : rightIcon ? (
-            <TouchableOpacity
-              onPress={onRightIconPress}
-              disabled={!onRightIconPress}
-              style={styles.iconButton}
-            >
-              <Icon name={rightIcon} size={18} color={isDark ? '#94A3B8' : '#64748B'} />
             </TouchableOpacity>
           ) : null}
         </View>

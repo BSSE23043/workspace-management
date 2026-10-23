@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Modal,
+  Modal, // pop ups
   StyleSheet,
   TouchableOpacity,
   Pressable,
@@ -23,8 +23,6 @@ export const DatePickerModal = ({
   onSelectDate,
   initialDate = new Date().toISOString().split('T')[0],
   title = 'Select Date',
-  minDate,
-  maxDate,
 }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette();
@@ -34,7 +32,7 @@ export const DatePickerModal = ({
     if (!dStr) return new Date();
     const parts = dStr.split('-');
     if (parts.length === 3) {
-      return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)); //10 for decimal base
     }
     return new Date();
   };
@@ -76,7 +74,7 @@ export const DatePickerModal = ({
   };
 
   const daysInMonth = (year, month) => {
-    return new Date(year, month + 1, 0).getDate();
+    return new Date(year, month + 1, 0).getDate(); // 0 takai next month ki fist sai pehle kai hi dys yani one month kai dasy hoon
   };
 
   // Get day of week for 1st of month (0 = Sun, 1 = Mon ... 6 = Sat)

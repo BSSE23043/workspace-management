@@ -41,8 +41,8 @@ export const HRDashboardScreen = ({ navigation }) => {
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
-  }, [navigation]);
-
+  }, [navigation]);   //yhn iski wese khas zaroorat nhi is navigation dependency ki
+ 
   // User roster for today's expected headcount (absence derivation)
   const [users, setUsers] = useState([]);
   useEffect(() => {
@@ -52,7 +52,7 @@ export const HRDashboardScreen = ({ navigation }) => {
     })();
   }, []);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = new Date().toISOString().split('T')[0]; // to ahve UTC time
 
   // Staff-only KPIs — the logged-in HR's own punches/leaves are never counted
   const todaysLogs = logs.filter((l) => l.date === todayStr && l.userId !== currentUser?.id);
@@ -125,7 +125,6 @@ export const HRDashboardScreen = ({ navigation }) => {
         title="HR Dashboard"
         subtitle="Human Resources"
         navigation={navigation}
-        showStatus={false}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

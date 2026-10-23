@@ -416,7 +416,6 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
                   Target: {t.internalDeadline} • {t.progressPercent}%
                 </Text>
                 <View style={[styles.editActionBadge, { backgroundColor: isSelected ? palette.primary : palette.inputBackground }]}>
-                  <Icon name={isSelected ? 'checkmark' : 'create'} size={12} color={isSelected ? '#FFFFFF' : palette.primary} />
                   <Text style={[styles.editActionText, { color: isSelected ? '#FFFFFF' : palette.primary }]}>
                     {isSelected ? 'Active in Workspace' : 'Inspect & Edit'}
                   </Text>

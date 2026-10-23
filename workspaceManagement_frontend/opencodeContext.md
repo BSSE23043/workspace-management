@@ -138,9 +138,8 @@ src/
   field), so the existing login flow and Admin portal work unchanged for them.
 
 ### Key components
-- **`HeaderBar`** — custom header; admin hamburger, back chevron, avatar→profile; status pill built
-  with `React.createElement` (syllabus showcase); hides pill when `showStatus={false}`; returns
-  `null` when `isEmbedded`.
+- **`HeaderBar`** — custom header wrapped in `SafeAreaView` (`edges={['top']}`); admin hamburger,
+  back chevron, avatar→profile; optional `rightAction`; returns `null` when `isEmbedded`.
 - **`AppInput`** — themed `forwardRef` TextInput; password eye toggle, "Locked (Admin Managed)" badge.
 - **`DatePickerModal`** — custom calendar (no native picker); "today" is hardcoded to **2026-10-18**.
 - **DP gallery picker** (`src/utils/imagePicker.js`) — `pickProfilePictureFromGallery(onPicked)`
@@ -339,6 +338,28 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
 
 ## Changelog (append every change/pull/merge on `Umar`)
 
+- **2026-10-23** — **Removed the `HeaderBar` status-pill feature and other dead code.**
+  - `components/common/HeaderBar.js`: deleted the `React.createElement` status pill plus the
+    `statusText` / `statusColor` / `showStatus` props and the `statusPill` / `statusDot` / `statusText`
+    styles.
+  - `HeaderBar` now wraps in `SafeAreaView` (`edges={['top']}`, additive) instead of computing
+    `useSafeAreaInsets`; container uses `paddingVertical: 10` and no fixed height.
+  - Admin hamburger simplified to `navigation.dispatch(DrawerActions.openDrawer())`; the dead
+    `navigation.openDrawer()` branch was removed (admin screens are nested inside the drawer's stack).
+  - `DatePickerModal`: removed the unused `minDate` / `maxDate` props (never read internally and never
+    passed by the 7 screens that use the modal). `initialDate` / `title` defaults kept as safe fallbacks.
+  - `AppInput`: removed the unused `rightIcon` / `onRightIconPress` props + right-icon branch, and the
+    never-passed `style` / `inputStyle` props (0 of 47 usages). Password-eye toggle and locked-input
+    features are still used.
+  - Removed the now-meaningless `showStatus={false}` from the 5 dashboards (`Admin`, `Client`, `HR`,
+    `Manager`, `SuperAdmin`) and `CompanyAdminsScreen`; removed `statusText="ON-PREMISE"` /
+    `statusColor` from `EmployeeDashboardScreen`. No status pill renders anywhere now.
+  - Also removed dead `onBackPress` / `onProfilePress` props (never passed by any screen); back always
+    calls `navigation.goBack()`, avatar always routes by role.
+  - `Icon.js`: dropped 21 unused glyphs (60 → 39); removed the dead `create` icon usages from
+    `TaskDetailScreen` and `MyTasksScreen` (text labels kept).
+  - Verified: no `showStatus` / `statusColor` / `onBackPress` / `onProfilePress` refs remain; Babel
+    parse OK on edited files; `HeaderBar` has no unused styles.
 - **2026-10-19** — **`company` removed from Redux; the company profile now lives in AsyncStorage.**
   - New `services/companyService.js` (`loadCompanyProfile` / `saveCompanyProfile`, read → merge → write →
     return). `store/index.js` is now **`theme` only** and `store/slices/companySlice.js` is **deleted**.

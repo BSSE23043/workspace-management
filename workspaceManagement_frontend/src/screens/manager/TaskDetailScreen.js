@@ -214,7 +214,6 @@ export const TaskDetailScreen = ({ navigation, route }) => {
                 }}
                 activeOpacity={0.8}
               >
-                <Icon name="create" size={13} color={palette.primary} />
                 <Text style={[styles.editTaskHeaderBtnText, { color: palette.primary }]}>Edit Task</Text>
               </TouchableOpacity>
             </View>
