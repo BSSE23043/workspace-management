@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
@@ -30,11 +31,93 @@ export const LoginScreen = () => {
   // Syllabus requirement: useRef focus chaining
   const passwordInputRef = useRef(null);
 
+  // Intro animation (runs once on first mount) — uses Animated.timing,
+  // Animated.spring, Animated.parallel, Animated.sequence
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.6)).current;
+  const brandOpacity = useRef(new Animated.Value(0)).current;
+  const brandTranslateY = useRef(new Animated.Value(18)).current;
+  const formOpacity = useRef(new Animated.Value(0)).current;
+  const formTranslateY = useRef(new Animated.Value(32)).current;
+  const infoOpacity = useRef(new Animated.Value(0)).current;
+  const infoTranslateY = useRef(new Animated.Value(24)).current;
+  const introAnimRef = useRef(null);
+
+  useEffect(() => {
+    const logoAnim = Animated.parallel([
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 420,
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        friction: 6,
+        tension: 90,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    const brandAnim = Animated.parallel([
+      Animated.timing(brandOpacity, {
+        toValue: 1,
+        duration: 380,
+        useNativeDriver: true,
+      }),
+      Animated.timing(brandTranslateY, {
+        toValue: 0,
+        duration: 380,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    const formAnim = Animated.parallel([
+      Animated.timing(formOpacity, {
+        toValue: 1,
+        duration: 420,
+        useNativeDriver: true,
+      }),
+      Animated.timing(formTranslateY, {
+        toValue: 0,
+        duration: 420,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    const infoAnim = Animated.parallel([
+      Animated.timing(infoOpacity, {
+        toValue: 1,
+        duration: 380,
+        useNativeDriver: true,
+      }),
+      Animated.timing(infoTranslateY, {
+        toValue: 0,
+        duration: 380,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    introAnimRef.current = Animated.sequence([
+      logoAnim,
+      brandAnim,
+      formAnim,
+      infoAnim,
+    ]);
+    introAnimRef.current.start();
+
+    return () => {
+      if (introAnimRef.current) {
+        introAnimRef.current.stop();
+      }
+    };
+  }, []);
+
   // Pure validation check for inline error banner
   const passwordHasError = password.length > 0 && !isValidPassword(password);
 
   const handleSignIn = async () => {
     setErrorMessage('');
+
     if (!isValidEmail(email)) {
       setErrorMessage('Please enter a valid work email address');
       return;
@@ -71,10 +154,29 @@ export const LoginScreen = () => {
         keyboardShouldPersistTaps="handled"
       >
         {/* Brand Header */}
-        <View style={styles.brandHeader}>
+        <Animated.View
+          style={[
+            styles.brandHeader,
+            {
+              opacity: logoOpacity,
+              transform: [{ scale: logoScale }],
+            },
+          ]}
+        >
           <View style={styles.logoBadge}>
             <Image source={IMAGES.appLogo} style={styles.logoImage} resizeMode="contain" />
           </View>
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.brandTextBlock,
+            {
+              opacity: brandOpacity,
+              transform: [{ translateY: brandTranslateY }],
+            },
+          ]}
+        >
           <Text style={[styles.brandTitle, isDark && styles.textWhite]}>
             Workforce Management System
           </Text>
@@ -85,10 +187,19 @@ export const LoginScreen = () => {
             <View style={styles.telemetryDot} />
             <Text style={styles.telemetryText}>Secure Enterprise Session</Text>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Login Form Card */}
-        <View style={[styles.formCard, isDark && styles.formCardDark]}>
+        <Animated.View
+          style={[
+            styles.formCard,
+            isDark && styles.formCardDark,
+            {
+              opacity: formOpacity,
+              transform: [{ translateY: formTranslateY }],
+            },
+          ]}
+        >
           <Text style={[styles.cardTitle, isDark && styles.textWhite]}>Sign In to Workspace</Text>
           <Text style={[styles.cardDesc, isDark && styles.textMuted]}>
             Enter your enterprise credentials to access your portal
@@ -166,13 +277,22 @@ export const LoginScreen = () => {
               </View>
             )}
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* No Self Sign-Up Card — Accounts are issued by the WMS platform team.
             (The old "Create Admin / User Account" registration flow was removed.
              The Super Admin now creates Company Admin accounts from the
              Super Admin portal.) */}
-        <View style={[styles.registerCard, isDark && styles.registerCardDark]}>
+        <Animated.View
+          style={[
+            styles.registerCard,
+            isDark && styles.registerCardDark,
+            {
+              opacity: infoOpacity,
+              transform: [{ translateY: infoTranslateY }],
+            },
+          ]}
+        >
           <View style={styles.infoIconBadge}>
             <Icon name="shield-checkmark" size={20} color="#1E293B" />
           </View>
@@ -186,7 +306,7 @@ export const LoginScreen = () => {
             <Text style={styles.infoEmailText}>superadmin@wms.com</Text> to
             register your company.
           </Text>
-        </View>
+        </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -206,6 +326,10 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   brandHeader: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  brandTextBlock: {
     alignItems: 'center',
     marginBottom: 24,
   },
