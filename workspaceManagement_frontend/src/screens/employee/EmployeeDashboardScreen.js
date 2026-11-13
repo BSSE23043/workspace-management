@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
@@ -13,6 +12,8 @@ import { loadLeaves } from '../../services/leaveService';
 import { loadAttendance } from '../../services/attendanceService';
 import { loadSalaryConfig } from '../../services/salaryService';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
+import CardButton from '../../components/common/CardButton';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
 import { elapsedWorkdaysInMonth, getUnexcusedAbsentDays, attendanceTrackingStart } from '../../utils/attendanceStats';
@@ -111,18 +112,18 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
 
         {/* Attendance Shortcut Card */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <TouchableOpacity
-            style={[styles.checkoutBtn, { backgroundColor: palette.primary }]}
+          <AppButton
+            title="Open GPS Map & Check Out"
+            variant="primary"
+            size="md"
+            icon="location"
+            fullWidth
             onPress={() => navigation.navigate('Attendance')}
-            activeOpacity={0.85}
-          >
-            <Icon name="location" size={16} color="#FFFFFF" />
-            <Text style={styles.checkoutBtnText}>Open GPS Map &amp; Check Out</Text>
-          </TouchableOpacity>
+          />
         </View>
 
         {/* Salary Summary Card */}
-        <TouchableOpacity
+        <CardButton
           style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
           onPress={() => navigation.navigate('Salary')}
           activeOpacity={0.8}
@@ -143,10 +144,10 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
           <Text style={[styles.salaryBreakdownSummary, { color: palette.textSecondary }]}>
             {presentDays}/{cfg.workingDaysPerPeriod} days present so far
           </Text>
-        </TouchableOpacity>
+        </CardButton>
 
         {/* Active Task Deliverable Card */}
-        <TouchableOpacity
+        <CardButton
           style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
           onPress={() => navigation.navigate('Work & Requests')}
           activeOpacity={0.8}
@@ -173,14 +174,14 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
           <View style={styles.taskBarBg}>
             <View style={[styles.taskBarFill, { width: `${activeTask?.progressPercent || 65}%`, backgroundColor: palette.primary }]} />
           </View>
-        </TouchableOpacity>
+        </CardButton>
 
         {/* 3 SELF-SERVICE ACTIONS Tiles */}
         <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
           SELF-SERVICE ACTIONS
         </Text>
         <View style={styles.actionTilesRow}>
-          <TouchableOpacity
+          <CardButton
             style={[styles.actionTile, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
             onPress={() => navigation.navigate('Work & Requests', { initialTab: 'LEAVES' })}
           >
@@ -188,9 +189,9 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               <Icon name="calendar" size={18} color={palette.primary} />
             </View>
             <Text style={[styles.tileText, { color: palette.textPrimary }]}>Request Leave</Text>
-          </TouchableOpacity>
+          </CardButton>
 
-          <TouchableOpacity
+          <CardButton
             style={[styles.actionTile, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
             onPress={() => navigation.navigate('Work & Requests', { initialTab: 'TICKETS' })}
           >
@@ -198,9 +199,9 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               <Icon name="ticket" size={18} color="#D97706" />
             </View>
             <Text style={[styles.tileText, { color: palette.textPrimary }]}>HR Support</Text>
-          </TouchableOpacity>
+          </CardButton>
 
-          <TouchableOpacity
+          <CardButton
             style={[styles.actionTile, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
             onPress={() => navigation.navigate('Salary')}
           >
@@ -208,7 +209,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               <Icon name="wallet" size={18} color="#16A34A" />
             </View>
             <Text style={[styles.tileText, { color: palette.textPrimary }]}>Payslip Slip</Text>
-          </TouchableOpacity>
+          </CardButton>
         </View>
 
         {/* Recent Attendance Logs */}
@@ -279,19 +280,6 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 14,
     elevation: 1,
-  },
-  checkoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: 8,
-    gap: 6,
-  },
-  checkoutBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
   },
   cardHeaderRow: {
     flexDirection: 'row',

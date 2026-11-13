@@ -4,12 +4,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
+import TextButton from '../../components/common/TextButton';
 import Icon from '../../components/common/Icon';
 import { loadLeaves } from '../../services/leaveService';
 import { loadAttendance } from '../../services/attendanceService';
@@ -119,12 +120,20 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
           </Text>
           <Text style={styles.heroAmount}>{formatCurrency(estimate.netSalary)}</Text>
 
-          <TouchableOpacity style={styles.downloadPdfBtn} onPress={handleDownloadPDF} activeOpacity={0.85}>
-            <Icon name="document-text" size={15} color={palette.primary} />
-            <Text style={[styles.downloadPdfText, { color: palette.primary }]}>
-              Download Official Payslip (PDF)
-            </Text>
-          </TouchableOpacity>
+          <AppButton
+            title="Download Official Payslip (PDF)"
+            variant="ghost"
+            size="sm"
+            icon="document-text"
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 8,
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+            }}
+            textStyle={{ color: palette.primary, fontWeight: '800' }}
+            onPress={handleDownloadPDF}
+          />
         </View>
 
         {/* 2x2 Shift & Attendance Telemetry Grid */}
@@ -191,14 +200,13 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
 
         {/* HR Ticket Link */}
         <View style={[styles.formulaCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <TouchableOpacity
-            style={styles.openTicketLink}
+          <TextButton
+            title="Discrepancy? Open an HR Ticket →"
+            color={palette.primary}
+            style={{ alignSelf: 'center' }}
+            textStyle={{ fontSize: 12, fontWeight: '700' }}
             onPress={() => navigation.navigate('Work & Requests', { initialTab: 'TICKETS' })}
-          >
-            <Text style={[styles.openTicketLinkText, { color: palette.primary }]}>
-              Discrepancy? Open an HR Ticket →
-            </Text>
-          </TouchableOpacity>
+          />
         </View>
       </ScrollView>
     </View>
@@ -232,19 +240,6 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: '900',
     marginBottom: 16,
-  },
-  downloadPdfBtn: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  downloadPdfText: {
-    fontSize: 12,
-    fontWeight: '800',
   },
   sectionTitle: {
     fontSize: 14,
@@ -328,13 +323,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     padding: 14,
-  },
-  openTicketLink: {
-    alignItems: 'center',
-  },
-  openTicketLinkText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
 });
 

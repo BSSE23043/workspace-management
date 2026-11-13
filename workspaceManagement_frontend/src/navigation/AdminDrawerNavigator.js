@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Image,
   Alert,
 } from 'react-native';
@@ -16,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../hooks/useTheme';
 import { getAvatarSource, IMAGES } from '../assets/images';
 import Icon from '../components/common/Icon';
+import CardButton from '../components/common/CardButton';
 
 // Screens
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
@@ -81,15 +81,15 @@ const CustomAdminDrawerContent = (props) => {
 
         {/* Menu Items */}
         <View style={styles.menuItemsList}>
-          <TouchableOpacity
+          <CardButton
             style={styles.menuItem}
             onPress={() => navigateTo('AdminDashboard')}
           >
             <Icon name="grid" size={18} color="#1E293B" />
             <Text style={[styles.menuItemText, { color: palette.textPrimary }]}>Executive Dashboard</Text>
-          </TouchableOpacity>
+          </CardButton>
 
-          <TouchableOpacity
+          <CardButton
             style={styles.menuItem}
             onPress={() => navigateTo('AdminProfile')}
           >
@@ -97,16 +97,16 @@ const CustomAdminDrawerContent = (props) => {
             <Text style={[styles.menuItemText, { color: palette.textPrimary }]}>
               Editable Profile &amp; Theme Settings
             </Text>
-          </TouchableOpacity>
+          </CardButton>
         </View>
       </DrawerContentScrollView>
 
       {/* Bottom Red Logout Button */}
       <View style={[styles.drawerFooter, { borderTopColor: palette.divider }]}>
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <CardButton style={styles.logoutBtn} onPress={handleLogout}>
           <Icon name="log-out" size={18} color="#DC2626" />
           <Text style={styles.logoutBtnText}>Logout</Text>
-        </TouchableOpacity>
+        </CardButton>
       </View>
     </View>
   );

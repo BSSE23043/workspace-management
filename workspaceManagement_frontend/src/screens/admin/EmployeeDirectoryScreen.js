@@ -5,7 +5,6 @@ import {
   StyleSheet,
   SectionList,
   TextInput,
-  TouchableOpacity,
   Image,
   Switch,
   RefreshControl,
@@ -14,6 +13,10 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
+import ChipButton from '../../components/common/ChipButton';
+import CardButton from '../../components/common/CardButton';
+import IconButton from '../../components/common/IconButton';
 import Icon from '../../components/common/Icon';
 import { getAvatarSource } from '../../assets/images';
 import { ROLE_THEMES } from '../../utils/permissions';
@@ -125,7 +128,7 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
       const isActive = item.isActive !== false;
 
       return (
-        <TouchableOpacity
+        <CardButton
           style={[styles.userCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
           onPress={() => navigation.navigate('EmployeeForm', { userId: item.id })}
           activeOpacity={0.8}
@@ -164,7 +167,7 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
               thumbColor={isActive ? '#16A34A' : '#94A3B8'}
             />
           </View>
-        </TouchableOpacity>
+        </CardButton>
       );
     },
     [palette, navigation, handleToggleActive]
@@ -183,13 +186,14 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
         showBack
         navigation={navigation}
         rightAction={
-          <TouchableOpacity
-            style={[styles.addUserBtn, { backgroundColor: palette.primary }]}
+          <AppButton
+            title="Add User"
+            variant="primary"
+            size="sm"
+            icon="add"
+            style={{ borderRadius: 8 }}
             onPress={() => navigation.navigate('EmployeeForm')}
-          >
-            <Icon name="add" size={16} color="#FFFFFF" />
-            <Text style={styles.addUserBtnText}>+ Add User</Text>
-          </TouchableOpacity>
+          />
         }
       />
 
@@ -204,9 +208,14 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
           style={[styles.searchInput, { color: palette.textPrimary }]}
         />
         {Boolean(searchQuery) && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Icon name="close-circle" size={16} color="#94A3B8" />
-          </TouchableOpacity>
+          <IconButton
+            icon="close-circle"
+            size={16}
+            color="#94A3B8"
+            variant="plain"
+            onPress={() => setSearchQuery('')}
+            accessibilityLabel="Clear search"
+          />
         )}
       </View>
 
@@ -220,37 +229,26 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
                 : users.filter((u) => u.role === f.id).length;
             const isSelected = selectedRole === f.id;
             return (
-              <TouchableOpacity
+              <ChipButton
                 key={f.id}
-                style={[
-                  styles.filterChip,
-                  isSelected
-                    ? { backgroundColor: palette.primary, borderColor: palette.primary }
-                    : { backgroundColor: palette.card, borderColor: palette.cardBorder },
-                ]}
+                label={`${f.label} (${count})`}
+                selected={isSelected}
+                unselectedStyle={{ backgroundColor: palette.card }}
+                style={{ borderRadius: 14, paddingVertical: 5 }}
+                textStyle={{ fontSize: 11, fontWeight: '700' }}
                 onPress={() => setSelectedRole(f.id)}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    isSelected ? { color: '#FFFFFF' } : { color: palette.textSecondary },
-                  ]}
-                >
-                  {f.label} ({count})
-                </Text>
-              </TouchableOpacity>
+              />
             );
           })}
         </View>
 
-        <TouchableOpacity
-          style={[styles.sortBtn, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
+        <ChipButton
+          label={`Sort: ${sortAsc ? 'A-Z' : 'Z-A'}`}
+          unselectedStyle={{ backgroundColor: palette.card }}
+          style={{ marginLeft: 8 }}
+          textStyle={{ fontSize: 11, fontWeight: '600', color: palette.textPrimary }}
           onPress={() => setSortAsc(!sortAsc)}
-        >
-          <Text style={[styles.sortText, { color: palette.textPrimary }]}>
-            Sort: {sortAsc ? 'A-Z' : 'Z-A'}
-          </Text>
-        </TouchableOpacity>
+        />
       </View>
 
       {/* Syllabus Requirement: SectionList with sticky section headers */}
@@ -286,19 +284,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  addUserBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  addUserBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -328,27 +313,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
     flex: 1,
-  },
-  filterChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  filterChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  sortBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginLeft: 8,
-  },
-  sortText: {
-    fontSize: 11,
-    fontWeight: '600',
   },
   listContent: {
     paddingHorizontal: 16,

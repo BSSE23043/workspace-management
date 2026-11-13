@@ -4,9 +4,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
@@ -15,6 +13,8 @@ import { loadLeaves } from '../../services/leaveService';
 import { loadAttendance } from '../../services/attendanceService';
 import { loadSalaryConfig } from '../../services/salaryService';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
+import CardButton from '../../components/common/CardButton';
 import Icon from '../../components/common/Icon';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
 import { elapsedWorkdaysInMonth, getUnexcusedAbsentDays, attendanceTrackingStart } from '../../utils/attendanceStats';
@@ -135,20 +135,17 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
           <Text style={[styles.monthText, { color: palette.textPrimary }]}>{monthLabel} Cycle</Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.recalcBtn, { backgroundColor: palette.primary }]}
-          onPress={handleRecalculateAll}
+        <AppButton
+          title="Recalculate All"
+          variant="primary"
+          size="sm"
+          icon="refresh"
+          loading={isCalculating}
           disabled={isCalculating}
-        >
-          {isCalculating ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <View style={styles.recalcBtnContent}>
-              <Icon name="refresh" size={14} color="#FFFFFF" />
-              <Text style={styles.recalcText}>Recalculate All</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+          style={styles.recalcBtn}
+          textStyle={styles.recalcText}
+          onPress={handleRecalculateAll}
+        />
       </View>
 
       {/* Featured Audit Card for selected user */}
@@ -233,7 +230,7 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
     const isSelected = item.id === selectedUser?.id;
     const payout = getBreakdownForUser(item);
     return (
-      <TouchableOpacity
+      <CardButton
         style={[
           styles.empQueueCard,
           { backgroundColor: palette.card, borderColor: palette.cardBorder },
@@ -256,7 +253,7 @@ export const SalaryEstimatesScreen = ({ navigation }) => {
           </View>
           <Icon name="chevron-forward" size={16} color="#94A3B8" />
         </View>
-      </TouchableOpacity>
+      </CardButton>
     );
   };
 

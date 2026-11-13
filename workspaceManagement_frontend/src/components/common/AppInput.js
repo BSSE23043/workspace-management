@@ -1,7 +1,8 @@
 import React, { useState, forwardRef } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import Icon from './Icon';
+import IconButton from './IconButton';
 
 export const AppInput = forwardRef(
   (
@@ -73,19 +74,14 @@ export const AppInput = forwardRef(
               <Icon name="lock-closed" size={16} color="#94A3B8" />
             </View>
           ) : secureTextEntry ? (
-            <TouchableOpacity
+            <IconButton
+              icon={isPasswordVisible ? 'eye-off' : 'eye'}
               onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-              style={styles.iconButton}
-              activeOpacity={0.7}
-              accessibilityRole="button"
+              size={18}
+              buttonSize={30}
+              color={isDark ? '#94A3B8' : '#64748B'}
               accessibilityLabel="Toggle Password Visibility"
-            >
-              <Icon
-                name={isPasswordVisible ? 'eye-off' : 'eye'}
-                size={18}
-                color={isDark ? '#94A3B8' : '#64748B'}
-              />
-            </TouchableOpacity>
+            />
           ) : null}
         </View>
 
@@ -180,11 +176,6 @@ const styles = StyleSheet.create({
   multilineInput: {
     minHeight: 70,
     textAlignVertical: 'top',
-  },
-  iconButton: {
-    padding: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   iconContainer: {
     padding: 6,

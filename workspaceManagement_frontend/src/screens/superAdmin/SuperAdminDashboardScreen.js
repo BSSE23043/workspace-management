@@ -8,12 +8,13 @@
 // "Company Admins" tab next to this screen.
 // ============================================================================
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 
 // Syllabus requirement: Dimensions API for responsive layouts
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -157,7 +158,7 @@ export const SuperAdminDashboardScreen = ({ navigation }) => {
           Administrative Modules
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <TouchableOpacity
+          <CardButton
             style={[styles.moduleCard, { backgroundColor: palette.surface, borderColor: palette.cardBorder }]}
             onPress={() => navigation.navigate('Company Admins')}
             activeOpacity={0.8}
@@ -171,7 +172,7 @@ export const SuperAdminDashboardScreen = ({ navigation }) => {
             <Text style={[styles.moduleDesc, { color: palette.textSecondary }]}>
               Add or remove Company Admin accounts
             </Text>
-          </TouchableOpacity>
+          </CardButton>
         </ScrollView>
       </ScrollView>
     </View>

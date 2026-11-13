@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
 } from 'react-native';
@@ -15,6 +14,7 @@ import { loadTasks, createTask } from '../../services/taskService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 import DatePickerModal from '../../components/common/DatePickerModal';
 
 const STATUS_TABS = [
@@ -162,7 +162,7 @@ export const TaskManagementScreen = ({ navigation }) => {
         {STATUS_TABS.map((tab) => {
           const isSelected = activeTab === tab.id;
           return (
-            <TouchableOpacity
+            <CardButton
               key={tab.id}
               style={[
                 styles.tabBtn,
@@ -180,14 +180,14 @@ export const TaskManagementScreen = ({ navigation }) => {
               >
                 {tab.label}
               </Text>
-            </TouchableOpacity>
+            </CardButton>
           );
         })}
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Top Quick Create & Assign Toggle Header */}
-        <TouchableOpacity
+        <CardButton
           style={[styles.createToggleBtn, { backgroundColor: palette.card, borderColor: palette.primary }]}
           onPress={() => setIsCreateOpen(!isCreateOpen)}
           activeOpacity={0.8}
@@ -206,7 +206,7 @@ export const TaskManagementScreen = ({ navigation }) => {
             </View>
           </View>
           <Icon name={isCreateOpen ? 'chevron-up' : 'chevron-down'} size={20} color={palette.primary} />
-        </TouchableOpacity>
+        </CardButton>
 
         {/* Collapsible Create & Assign New Task Form Card at the TOP */}
         {isCreateOpen && (
@@ -239,7 +239,7 @@ export const TaskManagementScreen = ({ navigation }) => {
               {engineers.map((eng) => {
                 const isSelected = assignedToIds.includes(eng.id);
                 return (
-                  <TouchableOpacity
+                  <CardButton
                     key={eng.id}
                     style={[
                       styles.selectChip,
@@ -257,7 +257,7 @@ export const TaskManagementScreen = ({ navigation }) => {
                     >
                       {eng.name}
                     </Text>
-                  </TouchableOpacity>
+                  </CardButton>
                 );
               })}
             </View>
@@ -266,7 +266,7 @@ export const TaskManagementScreen = ({ navigation }) => {
             <Text style={[styles.formLabel, { color: palette.textPrimary, marginTop: 10 }]}>Priority</Text>
             <View style={styles.chipsWrap}>
               {PRIORITIES.map((p) => (
-                <TouchableOpacity
+                <CardButton
                   key={p}
                   style={[
                     styles.selectChip,
@@ -283,7 +283,7 @@ export const TaskManagementScreen = ({ navigation }) => {
                   >
                     {p}
                   </Text>
-                </TouchableOpacity>
+                </CardButton>
               ))}
             </View>
 
@@ -291,25 +291,25 @@ export const TaskManagementScreen = ({ navigation }) => {
             <View style={styles.datesRow}>
               <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>Internal Due</Text>
-                <TouchableOpacity
+                <CardButton
                   style={[styles.dateBtn, { backgroundColor: palette.background, borderColor: palette.inputBorder }]}
                   onPress={() => setCalendarField('internal')}
                   activeOpacity={0.7}
                 >
                   <Icon name="calendar" size={16} color={palette.primary} />
                   <Text style={[styles.dateBtnText, { color: palette.textPrimary }]}>{internalDeadline}</Text>
-                </TouchableOpacity>
+                </CardButton>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>Client Due</Text>
-                <TouchableOpacity
+                <CardButton
                   style={[styles.dateBtn, { backgroundColor: palette.background, borderColor: palette.inputBorder }]}
                   onPress={() => setCalendarField('client')}
                   activeOpacity={0.7}
                 >
                   <Icon name="calendar" size={16} color={palette.primary} />
                   <Text style={[styles.dateBtnText, { color: palette.textPrimary }]}>{clientDeadline}</Text>
-                </TouchableOpacity>
+                </CardButton>
               </View>
             </View>
 
@@ -330,13 +330,13 @@ export const TaskManagementScreen = ({ navigation }) => {
               </View>
             )}
 
-            <TouchableOpacity
+            <CardButton
               style={[styles.assignTaskBtn, { backgroundColor: palette.primary }]}
               onPress={handleCreateTask}
               activeOpacity={0.85}
             >
               <Text style={styles.assignTaskBtnText}>Assign Task to Selected Engineers</Text>
-            </TouchableOpacity>
+            </CardButton>
           </View>
         )}
 
@@ -369,7 +369,7 @@ export const TaskManagementScreen = ({ navigation }) => {
         {filteredTasks.map((task) => {
           const hasConflict = task.hasConflict || task.bufferDays < 0;
           return (
-            <TouchableOpacity
+            <CardButton
               key={task.id}
               style={[
                 styles.taskCard,
@@ -453,7 +453,7 @@ export const TaskManagementScreen = ({ navigation }) => {
                   </Text>
                 </View>
               </View>
-            </TouchableOpacity>
+            </CardButton>
           );
         })}
       </ScrollView>

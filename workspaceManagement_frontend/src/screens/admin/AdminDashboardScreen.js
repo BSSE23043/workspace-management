@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Dimensions,
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
@@ -12,6 +11,8 @@ import { useAuth } from '../../context/AuthContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { loadCompanyProfile } from '../../services/companyService';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
+import CardButton from '../../components/common/CardButton';
 import Icon from '../../components/common/Icon';
 
 const { width } = Dimensions.get('window');
@@ -151,14 +152,13 @@ export const AdminDashboardScreen = ({ navigation }) => {
               Profile module to enter your company name, campus location,
               geofence perimeter and payroll policy.
             </Text>
-            <TouchableOpacity
-              style={styles.setupBtn}
+            <AppButton
+              title="Configure Company Profile"
+              variant="primary"
+              size="lg"
+              icon="business"
               onPress={() => navigation.navigate('CompanyProfile')}
-              activeOpacity={0.85}
-            >
-              <Icon name="business" size={16} color="#FFFFFF" />
-              <Text style={styles.setupBtnText}>Configure Company Profile</Text>
-            </TouchableOpacity>
+            />
           </View>
         )}
 
@@ -198,7 +198,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
         </Text>
         <View style={styles.shortcutsList}>
           {shortcuts.map((sc) => (
-            <TouchableOpacity
+            <CardButton
               key={sc.id}
               style={[styles.shortcutCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
               onPress={() => navigation.navigate(sc.target)}
@@ -216,7 +216,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
                 </Text>
               </View>
               <Icon name="chevron-forward" size={18} color="#94A3B8" />
-            </TouchableOpacity>
+            </CardButton>
           ))}
         </View>
         {/* NOTE: The "Recent Administrative Activity" section was removed on
@@ -376,20 +376,6 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 6,
     marginBottom: 14,
-  },
-  setupBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#1E293B',
-    borderRadius: 10,
-    paddingVertical: 12,
-  },
-  setupBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13.5,
-    fontWeight: '700',
   },
 });
 

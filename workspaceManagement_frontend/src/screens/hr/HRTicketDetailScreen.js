@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -20,6 +19,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
 import Icon from '../../components/common/Icon';
 // Shared "time ago" label — same one the requirement broadcasts use.
 import { timeAgo } from '../../utils/timeAgo';
@@ -173,36 +173,39 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
 
           {ticket?.status === 'OPEN' && (
             <View style={styles.lifecycleBtnRow}>
-              <TouchableOpacity
-                style={[styles.inProgressBtn, { borderColor: palette.primary, backgroundColor: palette.background }]}
+              <AppButton
+                title="Move to In-Progress"
+                variant="secondary"
+                size="md"
+                icon="time"
+                style={styles.inProgressBtn}
+                textStyle={styles.inProgressBtnText}
                 onPress={handleSetInProgress}
-                activeOpacity={0.8}
-              >
-                <Icon name="time" size={15} color={palette.primary} />
-                <Text style={[styles.inProgressBtnText, { color: palette.primary }]}>Move to In-Progress</Text>
-              </TouchableOpacity>
+              />
 
-              <TouchableOpacity
-                style={[styles.closeTicketBtn, { backgroundColor: '#16A34A' }]}
+              <AppButton
+                title="Resolve & Close Ticket"
+                variant="success"
+                size="md"
+                icon="checkmark-circle"
+                style={styles.closeTicketBtn}
+                textStyle={styles.closeTicketBtnText}
                 onPress={handleCloseTicket}
-                activeOpacity={0.85}
-              >
-                <Icon name="checkmark-circle" size={15} color="#FFFFFF" />
-                <Text style={styles.closeTicketBtnText}>Resolve & Close Ticket</Text>
-              </TouchableOpacity>
+              />
             </View>
           )}
 
           {ticket?.status === 'IN_PROGRESS' && (
             <View style={styles.lifecycleBtnRow}>
-              <TouchableOpacity
-                style={[styles.closeTicketBtn, { backgroundColor: '#16A34A', flex: 1 }]}
+              <AppButton
+                title="Resolve & Close Ticket"
+                variant="success"
+                size="md"
+                icon="checkmark-circle"
+                style={[styles.closeTicketBtn, { flex: 1 }]}
+                textStyle={styles.closeTicketBtnText}
                 onPress={handleCloseTicket}
-                activeOpacity={0.85}
-              >
-                <Icon name="checkmark-circle" size={15} color="#FFFFFF" />
-                <Text style={styles.closeTicketBtnText}>Resolve & Close Ticket</Text>
-              </TouchableOpacity>
+              />
             </View>
           )}
 
@@ -212,14 +215,15 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
                 <Icon name="checkmark-circle" size={18} color="#16A34A" />
                 <Text style={styles.resolvedBadgeText}>Ticket is Resolved & Closed</Text>
               </View>
-              <TouchableOpacity
-                style={[styles.reopenBtn, { borderColor: palette.primary, backgroundColor: palette.background }]}
+              <AppButton
+                title="Reopen Ticket"
+                variant="secondary"
+                size="sm"
+                icon="refresh"
+                style={styles.reopenBtn}
+                textStyle={styles.reopenBtnText}
                 onPress={handleReopen}
-                activeOpacity={0.8}
-              >
-                <Icon name="refresh" size={14} color={palette.primary} />
-                <Text style={[styles.reopenBtnText, { color: palette.primary }]}>Reopen Ticket</Text>
-              </TouchableOpacity>
+              />
             </View>
           )}
         </View>
@@ -256,12 +260,14 @@ export const HRTicketDetailScreen = ({ navigation, route }) => {
                 placeholderTextColor="#94A3B8"
                 style={[styles.replyInput, { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder, color: palette.textPrimary }]}
               />
-              <TouchableOpacity
-                style={[styles.sendReplyBtn, { backgroundColor: palette.primary }]}
+              <AppButton
+                title="Reply"
+                variant="primary"
+                size="sm"
+                style={styles.sendReplyBtn}
+                textStyle={styles.sendReplyText}
                 onPress={handleSendReply}
-              >
-                <Text style={styles.sendReplyText}>Reply</Text>
-              </TouchableOpacity>
+              />
             </View>
           )}
         </View>

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
 } from 'react-native';
@@ -24,6 +23,7 @@ import {
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 import DatePickerModal from '../../components/common/DatePickerModal';
 // Shared "time ago" label so broadcasts and client replies always show their
 // real age instead of a hardcoded "Just now".
@@ -219,7 +219,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
               {requirements.map((req) => {
                 const isSelected = req.id === activeReq?.id;
                 return (
-                  <TouchableOpacity
+                  <CardButton
                     key={req.id}
                     style={[
                       styles.reqPill,
@@ -234,7 +234,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                     <Text style={[styles.reqPillOrg, { color: palette.textSecondary }]}>
                       {req.organization}
                     </Text>
-                  </TouchableOpacity>
+                  </CardButton>
                 );
               })}
             </ScrollView>
@@ -243,7 +243,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
 
         {/* Collapsible "+ Create New Client Requirement" Form */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <TouchableOpacity
+          <CardButton
             style={styles.collapseHeader}
             onPress={() => setShowCreateForm(!showCreateForm)}
           >
@@ -258,7 +258,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
               size={18}
               color="#64748B"
             />
-          </TouchableOpacity>
+          </CardButton>
 
           {showCreateForm && (
             <View style={styles.createFormBody}>
@@ -277,7 +277,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
               <Text style={[styles.fieldLabel, { color: palette.textPrimary, marginTop: 10 }]}>
                 Client Organization *
               </Text>
-              <TouchableOpacity
+              <CardButton
                 style={[
                   styles.clientSelectBtn,
                   { backgroundColor: palette.inputBackground, borderColor: selectedClient ? palette.primary : palette.inputBorder },
@@ -303,7 +303,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                   size={16}
                   color={palette.primary}
                 />
-              </TouchableOpacity>
+              </CardButton>
 
               {showClientPicker && (
                 <View
@@ -325,7 +325,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                     clients.map((client) => {
                       const isClientSelected = client.id === selectedClientId;
                       return (
-                        <TouchableOpacity
+                        <CardButton
                           key={client.id}
                           style={[
                             styles.clientOptionRow,
@@ -355,7 +355,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                           {isClientSelected && (
                             <Icon name="checkmark-circle" size={16} color={palette.primary} />
                           )}
-                        </TouchableOpacity>
+                        </CardButton>
                       );
                     })
                   )}
@@ -366,20 +366,20 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
               <Text style={[styles.fieldLabel, { color: palette.textPrimary, marginTop: 10 }]}>
                 Contractual Client Deadline
               </Text>
-              <TouchableOpacity
+              <CardButton
                 style={[styles.datePickerBtn, { backgroundColor: palette.background, borderColor: palette.inputBorder }]}
                 onPress={() => setCalendarVisible(true)}
               >
                 <Icon name="calendar" size={16} color={palette.primary} />
                 <Text style={[styles.datePickerBtnText, { color: palette.textPrimary }]}>{newDeadline}</Text>
-              </TouchableOpacity>
+              </CardButton>
 
-              <TouchableOpacity
+              <CardButton
                 style={[styles.submitCreateBtn, { backgroundColor: palette.primary }]}
                 onPress={handleCreateRequirement}
               >
                 <Text style={styles.submitCreateText}>Save &amp; Scope Requirement</Text>
-              </TouchableOpacity>
+              </CardButton>
             </View>
           )}
         </View>
@@ -407,7 +407,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
             </View>
             {/* Minus button — deletes this requirement (and therefore removes it
                 from the client's dashboard, which reads the same storage). */}
-            <TouchableOpacity
+            <CardButton
               style={[
                 styles.minusBtn,
                 { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder },
@@ -417,7 +417,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
               onPress={handleRemoveRequirement}
             >
               <Text style={styles.minusBtnText}>-</Text>
-            </TouchableOpacity>
+            </CardButton>
           </View>
 
           {/* Lifecycle State Picker */}
@@ -428,7 +428,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
             {LIFECYCLE_STATES.map((st) => {
               const isSelected = activeReq.lifecycleState === st;
               return (
-                <TouchableOpacity
+                <CardButton
                   key={st}
                   style={[
                     styles.stateChip,
@@ -451,7 +451,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                   >
                     {st.replace('_', ' ')}
                   </Text>
-                </TouchableOpacity>
+                </CardButton>
               );
             })}
           </View>
@@ -470,7 +470,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
 
           <View style={styles.milestoneList}>
             {(activeReq.milestones || []).map((m) => (
-              <TouchableOpacity
+              <CardButton
                 key={m.id}
                 style={[styles.milestoneCheckRow, { borderColor: palette.divider }]}
                 onPress={async () => {
@@ -494,7 +494,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                   {m.title}
                 </Text>
                 {/* Minus button — removes this milestone from the requirement */}
-                <TouchableOpacity
+                <CardButton
                   style={[
                     styles.minusBtn,
                     { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder },
@@ -504,8 +504,8 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                   onPress={() => handleRemoveMilestone(m)}
                 >
                   <Text style={styles.minusBtnText}>-</Text>
-                </TouchableOpacity>
-              </TouchableOpacity>
+                </CardButton>
+              </CardButton>
             ))}
           </View>
 
@@ -518,12 +518,12 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
               placeholderTextColor="#94A3B8"
               style={[styles.milestoneInput, { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder, color: palette.textPrimary }]}
             />
-            <TouchableOpacity
+            <CardButton
               style={[styles.addMBtn, { backgroundColor: palette.primary }]}
               onPress={handleAddMilestone}
             >
               <Text style={styles.addMBtnText}>Add</Text>
-            </TouchableOpacity>
+            </CardButton>
           </View>
         </View>
 
@@ -547,7 +547,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
               // manager can spot a reply even while another chip is selected.
               const clientReplyCount = (req.clarificationReplies || []).length;
               return (
-                <TouchableOpacity
+                <CardButton
                   key={req.id}
                   style={[
                     styles.targetChip,
@@ -565,7 +565,7 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
                       ? ` • ${clientReplyCount} client ${clientReplyCount === 1 ? 'reply' : 'replies'}`
                       : ''}
                   </Text>
-                </TouchableOpacity>
+                </CardButton>
               );
             })}
           </View>
@@ -580,13 +580,13 @@ export const RequirementCoordinationScreen = ({ navigation }) => {
             style={[styles.broadcastInput, { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder, color: palette.textPrimary }]}
           />
 
-          <TouchableOpacity
+          <CardButton
             style={[styles.publishBtn, { backgroundColor: palette.primary }]}
             onPress={handlePublishBroadcast}
           >
             <Icon name="chatbubble-ellipses" size={15} color="#FFFFFF" />
             <Text style={styles.publishBtnText}>Publish Broadcast to {targetReq.organization}</Text>
-          </TouchableOpacity>
+          </CardButton>
 
           {/* Broadcast history — what this manager already published for the
               selected target requirement, with author + time ago. */}

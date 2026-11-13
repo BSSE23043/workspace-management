@@ -4,13 +4,14 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
 } from 'react-native';
 import { loadSalaryConfig, updateCompanySalaryConfig, updateEmployeeSalaryOverride } from '../../services/salaryService';
 import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
+import ChipButton from '../../components/common/ChipButton';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
 import { isValidNumber } from '../../utils/validation';
@@ -155,39 +156,22 @@ export const SalaryConfigScreen = ({ navigation }) => {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Segmented Switcher */}
         <View style={[styles.segmentedWrap, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-          <TouchableOpacity
-            style={[
-              styles.segmentBtn,
-              activeScope === 'COMPANY' && { backgroundColor: palette.primary },
-            ]}
+          <ChipButton
+            variant="segment"
+            selected={activeScope === 'COMPANY'}
+            label="Company-Wide Default"
             onPress={() => handleScopeChange('COMPANY')}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                activeScope === 'COMPANY' ? { color: '#FFFFFF' } : { color: palette.textSecondary },
-              ]}
-            >
-              Company-Wide Default
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.segmentBtn,
-              activeScope === 'OVERRIDE' && { backgroundColor: palette.primary },
-            ]}
+            activeColor={palette.primary}
+            style={styles.segmentBtn}
+          />
+          <ChipButton
+            variant="segment"
+            selected={activeScope === 'OVERRIDE'}
+            label={`Employee Override (${selectedEmployee?.name?.split(' ')[0] || 'Individual'})`}
             onPress={() => handleScopeChange('OVERRIDE')}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                activeScope === 'OVERRIDE' ? { color: '#FFFFFF' } : { color: palette.textSecondary },
-              ]}
-            >
-              Employee Override ({selectedEmployee?.name?.split(' ')[0] || 'Individual'})
-            </Text>
-          </TouchableOpacity>
+            activeColor={palette.primary}
+            style={styles.segmentBtn}
+          />
         </View>
 
         {/* Employee Selector when in OVERRIDE mode */}
@@ -204,14 +188,13 @@ export const SalaryConfigScreen = ({ navigation }) => {
               {eligibleEmployees.map((emp) => {
                 const isSelected = emp.id === selectedEmployeeId;
                 return (
-                  <TouchableOpacity
+                  <ChipButton
                     key={emp.id}
-                    style={[
-                      styles.empChip,
-                      { borderColor: isSelected ? palette.primary : palette.cardBorder },
-                      isSelected && { backgroundColor: palette.badge, borderWidth: 1.5 },
-                    ]}
+                    variant="chip"
+                    selected={isSelected}
                     onPress={() => handleSelectEmployee(emp)}
+                    activeColor={palette.primary}
+                    style={styles.empChip}
                   >
                     <View style={styles.empChipTop}>
                       <Text style={[styles.empChipName, { color: palette.textPrimary, fontWeight: isSelected ? '800' : '600' }]}>
@@ -225,7 +208,7 @@ export const SalaryConfigScreen = ({ navigation }) => {
                     <Text style={[styles.empChipSalary, { color: palette.primary }]}>
                       Base: PKR {Number(emp.baseSalary || 150000).toLocaleString()}
                     </Text>
-                  </TouchableOpacity>
+                  </ChipButton>
                 );
               })}
             </ScrollView>
@@ -291,13 +274,14 @@ export const SalaryConfigScreen = ({ navigation }) => {
           </View>
         )}
 
-        <TouchableOpacity
-          style={[styles.saveBtn, { backgroundColor: palette.primary }]}
+        <AppButton
+          title="Save Salary Configuration"
+          variant="primary"
+          size="md"
+          style={styles.saveBtn}
+          textStyle={styles.saveBtnText}
           onPress={handleSave}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.saveBtnText}>Save Salary Configuration</Text>
-        </TouchableOpacity>
+        />
       </ScrollView>
     </View>
   );

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
 } from 'react-native';
@@ -13,6 +12,9 @@ import { useTheme } from '../../hooks/useTheme';
 import { loadTasks, updateTaskStatus, addTaskLog } from '../../services/taskService';
 import { timeAgo } from '../../utils/timeAgo';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
+import ChipButton from '../../components/common/ChipButton';
+import CardButton from '../../components/common/CardButton';
 import Icon from '../../components/common/Icon';
 
 const TASK_TABS = [
@@ -151,25 +153,15 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
         {TASK_TABS.map((tab) => {
           const isSelected = selectedTab === tab.id;
           return (
-            <TouchableOpacity
+            <ChipButton
               key={tab.id}
-              style={[
-                styles.tabBtn,
-                isSelected
-                  ? { backgroundColor: palette.primary, borderColor: palette.primary }
-                  : { backgroundColor: palette.card, borderColor: palette.cardBorder },
-              ]}
+              label={tab.label}
+              variant="tab"
+              selected={isSelected}
+              style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+              textStyle={{ color: isSelected ? '#FFFFFF' : palette.textSecondary }}
               onPress={() => setSelectedTab(tab.id)}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  isSelected ? { color: '#FFFFFF' } : { color: palette.textSecondary },
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
+            />
           );
         })}
       </View>
@@ -213,18 +205,22 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
                   Completion Progress: {progressPercent}%
                 </Text>
                 <View style={styles.stepperWrap}>
-                  <TouchableOpacity
-                    style={[styles.stepperBtn, { backgroundColor: palette.inputBackground }]}
+                  <AppButton
+                    title="-10%"
+                    variant="ghost"
+                    size="xs"
+                    style={{ backgroundColor: palette.inputBackground, borderRadius: 6, paddingHorizontal: 10 }}
+                    textStyle={{ color: palette.textPrimary }}
                     onPress={() => handleAdjustPercent(-10)}
-                  >
-                    <Text style={[styles.stepperBtnText, { color: palette.textPrimary }]}>-10%</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.stepperBtn, { backgroundColor: palette.inputBackground }]}
+                  />
+                  <AppButton
+                    title="+10%"
+                    variant="ghost"
+                    size="xs"
+                    style={{ backgroundColor: palette.inputBackground, borderRadius: 6, paddingHorizontal: 10 }}
+                    textStyle={{ color: palette.textPrimary }}
                     onPress={() => handleAdjustPercent(10)}
-                  >
-                    <Text style={[styles.stepperBtnText, { color: palette.textPrimary }]}>+10%</Text>
-                  </TouchableOpacity>
+                  />
                 </View>
               </View>
 
@@ -242,29 +238,20 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
 
               {/* Quick Preset Buttons */}
               <View style={styles.quickPercentRow}>
-                {QUICK_PERCENTS.map((pct) => (
-                  <TouchableOpacity
-                    key={pct}
-                    style={[
-                      styles.quickPctBtn,
-                      progressPercent === String(pct)
-                        ? { backgroundColor: palette.primary }
-                        : { backgroundColor: palette.inputBackground },
-                    ]}
-                    onPress={() => setProgressPercent(String(pct))}
-                  >
-                    <Text
-                      style={[
-                        styles.quickPctText,
-                        progressPercent === String(pct)
-                          ? { color: '#FFFFFF' }
-                          : { color: palette.textSecondary },
-                      ]}
-                    >
-                      {pct}%
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {QUICK_PERCENTS.map((pct) => {
+                  const isSelected = progressPercent === String(pct);
+                  return (
+                    <ChipButton
+                      key={pct}
+                      label={`${pct}%`}
+                      variant="chip"
+                      selected={isSelected}
+                      style={{ paddingHorizontal: 10, paddingVertical: 6 }}
+                      textStyle={{ color: isSelected ? '#FFFFFF' : palette.textSecondary }}
+                      onPress={() => setProgressPercent(String(pct))}
+                    />
+                  );
+                })}
               </View>
             </View>
 
@@ -279,23 +266,15 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
                 {TASK_STATES.map((st) => {
                   const isSelected = taskState === st;
                   return (
-                    <TouchableOpacity
+                    <ChipButton
                       key={st}
-                      style={[
-                        styles.stateBtn,
-                        isSelected && { backgroundColor: palette.primary },
-                      ]}
+                      label={st.replace('_', ' ')}
+                      variant="tab"
+                      selected={isSelected}
+                      style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+                      textStyle={{ color: isSelected ? '#FFFFFF' : palette.textSecondary }}
                       onPress={() => setTaskState(st)}
-                    >
-                      <Text
-                        style={[
-                          styles.stateBtnText,
-                          isSelected ? { color: '#FFFFFF' } : { color: palette.textSecondary },
-                        ]}
-                      >
-                        {st.replace('_', ' ')}
-                      </Text>
-                    </TouchableOpacity>
+                    />
                   );
                 })}
               </View>
@@ -310,13 +289,13 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
                 style={[styles.noteInput, { backgroundColor: palette.surface, borderColor: palette.inputBorder, color: palette.textPrimary }]}
               />
 
-              <TouchableOpacity
-                style={[styles.saveBtn, { backgroundColor: palette.primary }]}
+              <AppButton
+                title="Save Progress Update"
+                variant="primary"
+                size="md"
+                fullWidth
                 onPress={() => handleSaveProgress(activeTask)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.saveBtnText}>Save Progress Update</Text>
-              </TouchableOpacity>
+              />
             </View>
 
             {/* Progress Messages — the shared manager/employee thread for this
@@ -357,13 +336,13 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
                   placeholderTextColor="#94A3B8"
                   style={[styles.threadInput, { backgroundColor: palette.surface, borderColor: palette.inputBorder, color: palette.textPrimary }]}
                 />
-                <TouchableOpacity
-                  style={[styles.threadSendBtn, { backgroundColor: palette.primary }]}
+                <AppButton
+                  title="Send"
+                  variant="primary"
+                  size="sm"
+                  style={{ paddingHorizontal: 14, borderRadius: 8 }}
                   onPress={handleSendMessage}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.threadSendText}>Send</Text>
-                </TouchableOpacity>
+                />
               </View>
             </View>
           </View>
@@ -382,7 +361,7 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
         {filteredTasks.map((t) => {
           const isSelected = t.id === activeTask?.id;
           return (
-            <TouchableOpacity
+            <CardButton
               key={t.id}
               style={[
                 styles.taskItemCard,
@@ -415,13 +394,13 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
                 <Text style={[styles.itemDeadline, { color: palette.textSecondary }]}>
                   Target: {t.internalDeadline} • {t.progressPercent}%
                 </Text>
-                <View style={[styles.editActionBadge, { backgroundColor: isSelected ? palette.primary : palette.inputBackground }]}>
-                  <Text style={[styles.editActionText, { color: isSelected ? '#FFFFFF' : palette.primary }]}>
-                    {isSelected ? 'Active in Workspace' : 'Inspect & Edit'}
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
+            <View style={[styles.editActionBadge, { backgroundColor: isSelected ? palette.primary : palette.inputBackground }]}>
+              <Text style={[styles.editActionText, { color: isSelected ? '#FFFFFF' : palette.primary }]}>
+                {isSelected ? 'Active in Workspace' : 'Inspect & Edit'}
+              </Text>
+            </View>
+            </View>
+            </CardButton>
           );
         })}
       </ScrollView>

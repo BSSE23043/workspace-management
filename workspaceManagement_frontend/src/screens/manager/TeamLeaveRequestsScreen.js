@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
 } from 'react-native';
@@ -14,6 +13,7 @@ import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 
 export const TeamLeaveRequestsScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
@@ -117,7 +117,7 @@ export const TeamLeaveRequestsScreen = ({ navigation }) => {
         {STATUS_TABS.map((tab) => {
           const isSelected = selectedTab === tab.id;
           return (
-            <TouchableOpacity
+            <CardButton
               key={tab.id}
               style={[
                 styles.tabBtn,
@@ -135,7 +135,7 @@ export const TeamLeaveRequestsScreen = ({ navigation }) => {
               >
                 {tab.label} ({tab.count})
               </Text>
-            </TouchableOpacity>
+            </CardButton>
           );
         })}
       </View>
@@ -205,23 +205,23 @@ export const TeamLeaveRequestsScreen = ({ navigation }) => {
                   )}
 
                   <View style={styles.actionButtonsRow}>
-                    <TouchableOpacity
+                    <CardButton
                       style={[styles.approveBtn, { backgroundColor: '#16A34A' }]}
                       onPress={() => handleApprove(leave)}
                       activeOpacity={0.85}
                     >
                       <Icon name="checkmark" size={15} color="#FFFFFF" />
                       <Text style={styles.btnText}>✓ Approve Leave</Text>
-                    </TouchableOpacity>
+                    </CardButton>
 
-                    <TouchableOpacity
+                    <CardButton
                       style={styles.rejectBtn}
                       onPress={() => handleReject(leave)}
                       activeOpacity={0.85}
                     >
                       <Icon name="close" size={15} color="#DC2626" />
                       <Text style={styles.rejectBtnText}>✕ Reject Leave</Text>
-                    </TouchableOpacity>
+                    </CardButton>
                   </View>
                 </View>
               ) : (

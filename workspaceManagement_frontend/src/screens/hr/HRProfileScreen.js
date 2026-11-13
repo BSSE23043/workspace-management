@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Image,
   Switch,
   Alert,
@@ -12,6 +11,8 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
+import IconButton from '../../components/common/IconButton';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
 import { getAvatarSource } from '../../assets/images';
@@ -56,12 +57,15 @@ export const HRProfileScreen = ({ navigation }) => {
               style={styles.avatarImg}
             />
             {/* Active DP change button for HR */}
-            <TouchableOpacity
-              style={[styles.cameraBadge, { backgroundColor: palette.primary }]}
+            <IconButton
+              icon="camera"
+              size={14}
+              buttonSize={26}
+              borderRadius={13}
+              variant="primary"
+              style={styles.cameraBadge}
               onPress={handleChangeDp}
-            >
-              <Icon name="camera" size={14} color="#FFFFFF" />
-            </TouchableOpacity>
+            />
           </View>
 
           <Text style={[styles.userName, { color: palette.textPrimary }]}>{currentUser?.name}</Text>
@@ -185,13 +189,14 @@ export const HRProfileScreen = ({ navigation }) => {
         {/* Demo Switcher & Logout */}
         {/* Logout */}
         <View style={styles.bottomActions}>
-          <TouchableOpacity
-            style={styles.logoutBtn}
+          <AppButton
+            title="Log Out of Operations"
+            variant="dangerSoft"
+            size="md"
+            icon="log-out"
+            fullWidth
             onPress={handleLogout}
-          >
-            <Icon name="log-out" size={16} color="#DC2626" />
-            <Text style={styles.logoutBtnText}>Log Out of Operations</Text>
-          </TouchableOpacity>
+          />
         </View>
       </ScrollView>
     </View>

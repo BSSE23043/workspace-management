@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
+import ChipButton from '../../components/common/ChipButton';
 import MyLeaveRequestsScreen from './MyLeaveRequestsScreen';
 import MyHRTicketsScreen from './MyHRTicketsScreen';
 import MyTasksScreen from './MyTasksScreen';
@@ -33,62 +34,40 @@ export const WorkAndRequestsHubScreen = ({ navigation, route }) => {
 
       {/* Segment Switcher Header */}
       <View style={[styles.segmentBar, { backgroundColor: palette.card, borderBottomColor: palette.cardBorder }]}>
-        <TouchableOpacity
-          style={[
-            styles.segmentItem,
-            activeSegment === 'LEAVES' && { borderBottomColor: palette.primary, borderBottomWidth: 3 },
-          ]}
-          onPress={() => setActiveSegment('LEAVES')}
-        >
-          <Text
-            style={[
-              styles.segmentText,
-              activeSegment === 'LEAVES'
-                ? { color: palette.primary, fontWeight: '800' }
-                : { color: palette.textSecondary },
-            ]}
-          >
-            Leave Requests
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.segmentItem,
-            activeSegment === 'TICKETS' && { borderBottomColor: palette.primary, borderBottomWidth: 3 },
-          ]}
-          onPress={() => setActiveSegment('TICKETS')}
-        >
-          <Text
-            style={[
-              styles.segmentText,
-              activeSegment === 'TICKETS'
-                ? { color: palette.primary, fontWeight: '800' }
-                : { color: palette.textSecondary },
-            ]}
-          >
-            HR Tickets
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.segmentItem,
-            activeSegment === 'TASKS' && { borderBottomColor: palette.primary, borderBottomWidth: 3 },
-          ]}
-          onPress={() => setActiveSegment('TASKS')}
-        >
-          <Text
-            style={[
-              styles.segmentText,
-              activeSegment === 'TASKS'
-                ? { color: palette.primary, fontWeight: '800' }
-                : { color: palette.textSecondary },
-            ]}
-          >
-            Sprint Tasks
-          </Text>
-        </TouchableOpacity>
+        {[
+          { id: 'LEAVES', label: 'Leave Requests' },
+          { id: 'TICKETS', label: 'HR Tickets' },
+          { id: 'TASKS', label: 'Sprint Tasks' },
+        ].map((tab) => {
+          const isActive = activeSegment === tab.id;
+          return (
+            <ChipButton
+              key={tab.id}
+              label={tab.label}
+              variant="segment"
+              selected={isActive}
+              activeColor="transparent"
+              selectedTextColor={palette.primary}
+              style={{ paddingVertical: 12 }}
+              selectedStyle={{
+                borderBottomWidth: 3,
+                borderBottomColor: palette.primary,
+                borderRadius: 0,
+              }}
+              unselectedStyle={{
+                borderBottomWidth: 3,
+                borderBottomColor: 'transparent',
+                borderRadius: 0,
+              }}
+              textStyle={{
+                fontSize: 12,
+                color: isActive ? palette.primary : palette.textSecondary,
+                fontWeight: isActive ? '800' : '600',
+              }}
+              onPress={() => setActiveSegment(tab.id)}
+            />
+          );
+        })}
       </View>
 
       <View style={styles.contentWrap}>
@@ -108,17 +87,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 1,
     paddingHorizontal: 8,
-  },
-  segmentItem: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  segmentText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   contentWrap: {
     flex: 1,

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
 } from 'react-native';
 import { loadTickets, createTicket } from '../../services/ticketService';
@@ -12,7 +11,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
-import Icon from '../../components/common/Icon';
+import AppButton from '../../components/common/AppButton';
+import CardButton from '../../components/common/CardButton';
 import DatePickerModal from '../../components/common/DatePickerModal';
 
 export const MyHRTicketsScreen = ({ navigation, isEmbedded = false }) => {
@@ -97,26 +97,31 @@ export const MyHRTicketsScreen = ({ navigation, isEmbedded = false }) => {
           <Text style={[styles.fieldLabel, { color: palette.textPrimary }]}>
             Event Date
           </Text>
-          <TouchableOpacity
-            style={[
-              styles.datePickerBtn,
-              { backgroundColor: palette.surface, borderColor: palette.inputBorder },
-            ]}
+          <AppButton
+            title={targetDate || 'Select Date from Calendar'}
+            variant="ghost"
+            size="md"
+            icon="calendar"
+            style={{
+              backgroundColor: palette.surface,
+              borderWidth: 1,
+              borderColor: palette.inputBorder,
+              justifyContent: 'flex-start',
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              marginBottom: 12,
+            }}
+            textStyle={{ color: palette.textPrimary, fontWeight: '600' }}
             onPress={() => setShowDatePicker(true)}
-          >
-            <Icon name="calendar" size={16} color={palette.primary} />
-            <Text style={[styles.datePickerBtnText, { color: palette.textPrimary }]}>
-              {targetDate || 'Select Date from Calendar'}
-            </Text>
-          </TouchableOpacity>
+          />
 
-          <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: palette.primary }]}
+          <AppButton
+            title="Submit HR Ticket"
+            variant="primary"
+            size="md"
+            fullWidth
             onPress={handleSubmitTicket}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.submitBtnText}>Submit HR Ticket</Text>
-          </TouchableOpacity>
+          />
         </View>
 
         {/* Ticket History & Logs */}
@@ -129,7 +134,7 @@ export const MyHRTicketsScreen = ({ navigation, isEmbedded = false }) => {
           </Text>
         ) : null}
         {myTickets.map((t) => (
-          <TouchableOpacity
+          <CardButton
             key={t.id}
             style={[styles.ticketCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
             activeOpacity={0.85}
@@ -160,7 +165,7 @@ export const MyHRTicketsScreen = ({ navigation, isEmbedded = false }) => {
             <Text style={[styles.ticketOpenHint, { color: palette.primary }]}>
               View discussion →
             </Text>
-          </TouchableOpacity>
+          </CardButton>
         ))}
       </ScrollView>
 
@@ -193,16 +198,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 12,
-  },
-  submitBtn: {
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  submitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
   },
   sectionHeading: {
     fontSize: 14,
@@ -265,20 +260,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 6,
-  },
-  datePickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  datePickerBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
 });
 

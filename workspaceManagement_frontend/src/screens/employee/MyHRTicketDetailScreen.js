@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +12,7 @@ import { loadTickets, addTicketMessage } from '../../services/ticketService';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
 import Icon from '../../components/common/Icon';
 // Shared "time ago" label — same one the requirement broadcasts use.
 import { timeAgo } from '../../utils/timeAgo';
@@ -165,12 +165,13 @@ export const MyHRTicketDetailScreen = ({ navigation, route }) => {
                 placeholderTextColor="#94A3B8"
                 style={[styles.replyInput, { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder, color: palette.textPrimary }]}
               />
-              <TouchableOpacity
-                style={[styles.sendReplyBtn, { backgroundColor: palette.primary }]}
+              <AppButton
+                title="Send"
+                variant="primary"
+                size="sm"
+                style={{ paddingHorizontal: 14, borderRadius: 8 }}
                 onPress={handleSendReply}
-              >
-                <Text style={styles.sendReplyText}>Send</Text>
-              </TouchableOpacity>
+              />
             </View>
           )}
         </View>
@@ -300,16 +301,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     fontSize: 12,
-  },
-  sendReplyBtn: {
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    justifyContent: 'center',
-  },
-  sendReplyText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
   },
   // Shown in place of the reply box once the ticket is closed.
   closedNote: {

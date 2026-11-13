@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   Modal,
@@ -22,6 +21,7 @@ import {
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 import DatePickerModal from '../../components/common/DatePickerModal';
 
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -199,7 +199,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
               <View style={[styles.statusBadge, { backgroundColor: palette.badge }]}>
                 <Text style={[styles.statusBadgeText, { color: palette.primary }]}>{task?.status}</Text>
               </View>
-              <TouchableOpacity
+              <CardButton
                 style={[styles.editTaskHeaderBtn, { borderColor: palette.primary }]}
                 onPress={() => {
                   setEditTitle(task?.title || '');
@@ -215,7 +215,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.editTaskHeaderBtnText, { color: palette.primary }]}>Edit Task</Text>
-              </TouchableOpacity>
+              </CardButton>
             </View>
           </View>
 
@@ -299,12 +299,12 @@ export const TaskDetailScreen = ({ navigation, route }) => {
                 { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder, color: palette.textPrimary },
               ]}
             />
-            <TouchableOpacity
+            <CardButton
               style={[styles.postBtn, { backgroundColor: palette.primary }]}
               onPress={handlePostNote}
             >
               <Text style={styles.postBtnText}>Post</Text>
-            </TouchableOpacity>
+            </CardButton>
           </View>
         </View>
 
@@ -321,24 +321,24 @@ export const TaskDetailScreen = ({ navigation, route }) => {
               </View>
             </View>
 
-            <TouchableOpacity
+            <CardButton
               style={[styles.revertSyncBtn, { borderColor: '#DC2626', backgroundColor: palette.card }]}
               onPress={handleToggleSyncMilestone}
               activeOpacity={0.85}
             >
               <Icon name="refresh" size={16} color="#DC2626" />
               <Text style={styles.revertSyncBtnText}>Revert Milestone Sync (Unmark)</Text>
-            </TouchableOpacity>
+            </CardButton>
           </View>
         ) : (
-          <TouchableOpacity
+          <CardButton
             style={[styles.syncBtn, { backgroundColor: palette.primary }]}
             onPress={handleToggleSyncMilestone}
             activeOpacity={0.85}
           >
             <Icon name="checkmark-done" size={18} color="#FFFFFF" />
             <Text style={styles.syncBtnText}>Mark Ready for Client Milestone Sync</Text>
-          </TouchableOpacity>
+          </CardButton>
         )}
 
         {/* Edit Task Modal */}
@@ -357,9 +357,9 @@ export const TaskDetailScreen = ({ navigation, route }) => {
                     {task.code} • Update title, deadlines, assignees
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => setIsEditModalVisible(false)}>
+                <CardButton onPress={() => setIsEditModalVisible(false)}>
                   <Icon name="close" size={22} color={palette.textSecondary} />
-                </TouchableOpacity>
+                </CardButton>
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
@@ -381,7 +381,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
                 <Text style={[styles.formLabel, { color: palette.textPrimary, marginTop: 8 }]}>Priority</Text>
                 <View style={styles.chipsWrap}>
                   {PRIORITIES.map((p) => (
-                    <TouchableOpacity
+                    <CardButton
                       key={p}
                       style={[
                         styles.selectChip,
@@ -398,7 +398,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
                       >
                         {p}
                       </Text>
-                    </TouchableOpacity>
+                    </CardButton>
                   ))}
                 </View>
 
@@ -410,7 +410,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
                   {engineers.map((eng) => {
                     const isSelected = editAssignedIds.includes(eng.id);
                     return (
-                      <TouchableOpacity
+                      <CardButton
                         key={eng.id}
                         style={[
                           styles.selectChip,
@@ -436,7 +436,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
                         >
                           {eng.name}
                         </Text>
-                      </TouchableOpacity>
+                      </CardButton>
                     );
                   })}
                 </View>
@@ -445,41 +445,41 @@ export const TaskDetailScreen = ({ navigation, route }) => {
                 <View style={styles.modalDatesRow}>
                   <View style={{ flex: 1, marginRight: 8 }}>
                     <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>Internal Due</Text>
-                    <TouchableOpacity
+                    <CardButton
                       style={[styles.dateBtn, { backgroundColor: palette.background, borderColor: palette.inputBorder }]}
                       onPress={() => setCalendarField('internal')}
                     >
                       <Icon name="calendar" size={15} color={palette.primary} />
                       <Text style={[styles.dateBtnText, { color: palette.textPrimary }]}>{editInternalDeadline}</Text>
-                    </TouchableOpacity>
+                    </CardButton>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>Client Due</Text>
-                    <TouchableOpacity
+                    <CardButton
                       style={[styles.dateBtn, { backgroundColor: palette.background, borderColor: palette.inputBorder }]}
                       onPress={() => setCalendarField('client')}
                     >
                       <Icon name="calendar" size={15} color={palette.primary} />
                       <Text style={[styles.dateBtnText, { color: palette.textPrimary }]}>{editClientDeadline}</Text>
-                    </TouchableOpacity>
+                    </CardButton>
                   </View>
                 </View>
               </ScrollView>
 
               <View style={styles.modalActionsRow}>
-                <TouchableOpacity
+                <CardButton
                   style={[styles.modalCancelBtn, { borderColor: palette.cardBorder }]}
                   onPress={() => setIsEditModalVisible(false)}
                 >
                   <Text style={[styles.modalCancelBtnText, { color: palette.textSecondary }]}>Cancel</Text>
-                </TouchableOpacity>
+                </CardButton>
 
-                <TouchableOpacity
+                <CardButton
                   style={[styles.modalSaveBtn, { backgroundColor: palette.primary }]}
                   onPress={handleSaveEdit}
                 >
                   <Text style={styles.modalSaveBtnText}>Save Changes</Text>
-                </TouchableOpacity>
+                </CardButton>
               </View>
             </View>
           </View>

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Image,
   Alert,
 } from 'react-native';
@@ -12,6 +11,8 @@ import { checkIn, checkOut, loadAttendance } from '../../services/attendanceServ
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
+import ChipButton from '../../components/common/ChipButton';
 import Icon from '../../components/common/Icon';
 import { IMAGES } from '../../assets/images';
 import { calculateHaversineDistance, isWithinGeofence } from '../../utils/geofence';
@@ -167,33 +168,43 @@ export const AttendanceActionScreen = ({ navigation }) => {
             Simulate GPS Position (Haversine Formula Tester)
           </Text>
           <View style={styles.simButtonsRow}>
-            <TouchableOpacity
-              style={[
-                styles.simBtn,
-                gpsState.simulatedMode === 'INSIDE'
-                  ? { backgroundColor: '#16A34A' }
-                  : { backgroundColor: palette.inputBackground, borderColor: palette.cardBorder, borderWidth: 1 },
-              ]}
+            <ChipButton
+              label="Inside 200m (14.2m)"
+              variant="segment"
+              selected={gpsState.simulatedMode === 'INSIDE'}
+              activeColor="#16A34A"
+              style={{ paddingVertical: 10 }}
+              unselectedStyle={{
+                backgroundColor: palette.inputBackground,
+                borderWidth: 1,
+                borderColor: palette.cardBorder,
+              }}
+              textStyle={{
+                fontSize: 11,
+                fontWeight: '700',
+                color: gpsState.simulatedMode === 'INSIDE' ? '#FFFFFF' : palette.textPrimary,
+              }}
               onPress={() => dispatch({ type: 'SET_TEST_MODE', payload: 'INSIDE' })}
-            >
-              <Text style={[styles.simBtnText, gpsState.simulatedMode === 'INSIDE' ? { color: '#FFFFFF' } : { color: palette.textPrimary }]}>
-                Inside 200m (14.2m)
-              </Text>
-            </TouchableOpacity>
+            />
 
-            <TouchableOpacity
-              style={[
-                styles.simBtn,
-                gpsState.simulatedMode === 'OUTSIDE'
-                  ? { backgroundColor: '#DC2626' }
-                  : { backgroundColor: palette.inputBackground, borderColor: palette.cardBorder, borderWidth: 1 },
-              ]}
+            <ChipButton
+              label="Outside 200m (520m - Blocked)"
+              variant="segment"
+              selected={gpsState.simulatedMode === 'OUTSIDE'}
+              activeColor="#DC2626"
+              style={{ paddingVertical: 10 }}
+              unselectedStyle={{
+                backgroundColor: palette.inputBackground,
+                borderWidth: 1,
+                borderColor: palette.cardBorder,
+              }}
+              textStyle={{
+                fontSize: 11,
+                fontWeight: '700',
+                color: gpsState.simulatedMode === 'OUTSIDE' ? '#FFFFFF' : palette.textPrimary,
+              }}
               onPress={() => dispatch({ type: 'SET_TEST_MODE', payload: 'OUTSIDE' })}
-            >
-              <Text style={[styles.simBtnText, gpsState.simulatedMode === 'OUTSIDE' ? { color: '#FFFFFF' } : { color: palette.textPrimary }]}>
-                Outside 200m (520m - Blocked)
-              </Text>
-            </TouchableOpacity>
+            />
           </View>
         </View>
 
@@ -242,24 +253,28 @@ export const AttendanceActionScreen = ({ navigation }) => {
         </View>
 
         {/* Primary Punch Action Button */}
-        <TouchableOpacity
-          style={[
-            styles.punchBtn,
-            { backgroundColor: isCheckedIn ? '#DC2626' : palette.primary },
-            !gpsState.isInside && styles.punchBtnDisabled,
-          ]}
+        <AppButton
+          title={isCheckedIn ? 'Check Out of Current Shift' : 'Check In to Current Shift'}
+          variant={isCheckedIn ? 'danger' : 'primary'}
+          size="lg"
+          icon="time"
+          disabled={!gpsState.isInside}
+          fullWidth
+          style={{
+            marginBottom: 10,
+            ...(!gpsState.isInside ? { backgroundColor: '#94A3B8' } : null),
+          }}
           onPress={handleToggleShiftPunch}
-          activeOpacity={0.85}
-        >
-          <Icon name="time" size={18} color="#FFFFFF" />
-          <Text style={styles.punchBtnText}>
-            {isCheckedIn ? 'Check Out of Current Shift' : 'Check In to Current Shift'}
-          </Text>
-        </TouchableOpacity>
+        />
 
         {/* Force GPS Refresh Button */}
-        <TouchableOpacity
-          style={[styles.refreshGpsBtn, { borderColor: palette.primary }]}
+        <AppButton
+          title="Force GPS Refresh"
+          variant="secondary"
+          size="md"
+          icon="refresh"
+          fullWidth
+          style={{ marginBottom: 16 }}
           onPress={() => {
             dispatch({ type: 'FORCE_REFRESH' });
             Alert.alert(
@@ -267,12 +282,7 @@ export const AttendanceActionScreen = ({ navigation }) => {
               'Your GPS location has been refreshed successfully! Verified inside campus zone (Accuracy: ±5m).'
             );
           }}
-        >
-          <Icon name="refresh" size={15} color={palette.primary} />
-          <Text style={[styles.refreshGpsText, { color: palette.primary }]}>
-            Force GPS Refresh
-          </Text>
-        </TouchableOpacity>
+        />
 
         {/* Recent Punch Logs — real punches from Redux */}
         <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
@@ -384,16 +394,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
-  simBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  simBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
   geofenceCard: {
     borderRadius: 12,
     borderWidth: 1.5,
@@ -439,37 +439,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
     marginTop: 1,
-  },
-  punchBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-    paddingVertical: 14,
-    gap: 8,
-    marginBottom: 10,
-  },
-  punchBtnDisabled: {
-    backgroundColor: '#94A3B8',
-  },
-  punchBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  refreshGpsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderRadius: 8,
-    paddingVertical: 11,
-    gap: 6,
-    marginBottom: 16,
-  },
-  refreshGpsText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   sectionHeading: {
     fontSize: 13,

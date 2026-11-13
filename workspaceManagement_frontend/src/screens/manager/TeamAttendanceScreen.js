@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   SectionList,
-  TouchableOpacity,
   Alert,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
@@ -14,6 +13,7 @@ import { loadLeaves } from '../../services/leaveService';
 import { loadAttendance } from '../../services/attendanceService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 
 import DatePickerModal from '../../components/common/DatePickerModal';
 
@@ -229,14 +229,14 @@ export const TeamAttendanceScreen = ({ navigation }) => {
 
       {/* Date Stepper with Calendar Launcher */}
       <View style={[styles.dateBar, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-        <TouchableOpacity
+        <CardButton
           onPress={() => setSelectedDate(shiftDate(selectedDate, -1))}
           accessibilityLabel="Previous Day"
         >
           <Text style={styles.stepperArrow}>&lt;</Text>
-        </TouchableOpacity>
+        </CardButton>
 
-        <TouchableOpacity
+        <CardButton
           style={styles.dateRow}
           onPress={() => setCalendarVisible(true)}
           activeOpacity={0.7}
@@ -245,21 +245,21 @@ export const TeamAttendanceScreen = ({ navigation }) => {
           <Icon name="calendar" size={16} color={palette.primary} />
           <Text style={[styles.dateText, { color: palette.textPrimary }]}>{formattedDisplayDate}</Text>
           <Icon name="chevron-down" size={14} color={palette.textSecondary} />
-        </TouchableOpacity>
+        </CardButton>
 
-        <TouchableOpacity
+        <CardButton
           onPress={() => setSelectedDate(shiftDate(selectedDate, 1))}
           accessibilityLabel="Next Day"
         >
           <Text style={styles.stepperArrow}>&gt;</Text>
-        </TouchableOpacity>
+        </CardButton>
 
-        <TouchableOpacity
+        <CardButton
           style={[styles.todayTag, { backgroundColor: palette.primary }]}
           onPress={() => setSelectedDate(todayStr)}
         >
           <Text style={styles.todayTagText}>Today</Text>
-        </TouchableOpacity>
+        </CardButton>
       </View>
 
       {/* Filter Pills */}
@@ -267,7 +267,7 @@ export const TeamAttendanceScreen = ({ navigation }) => {
         {filterPills.map((pill) => {
           const isSelected = activeFilter === pill.id;
           return (
-            <TouchableOpacity
+            <CardButton
               key={pill.id}
               style={[
                 styles.filterPill,
@@ -285,7 +285,7 @@ export const TeamAttendanceScreen = ({ navigation }) => {
               >
                 {pill.label} ({pill.count})
               </Text>
-            </TouchableOpacity>
+            </CardButton>
           );
         })}
       </View>
@@ -324,7 +324,7 @@ export const TeamAttendanceScreen = ({ navigation }) => {
 
       {/* Bottom Export Button */}
       <View style={[styles.bottomBar, { backgroundColor: palette.surface, borderTopColor: palette.cardBorder }]}>
-        <TouchableOpacity
+        <CardButton
           style={[styles.exportBtn, { backgroundColor: palette.primary }]}
           onPress={handleExportReport}
           activeOpacity={0.85}
@@ -333,7 +333,7 @@ export const TeamAttendanceScreen = ({ navigation }) => {
           <Text style={styles.exportBtnText}>
             Export Daily Team Attendance Report (PDF/CSV)
           </Text>
-        </TouchableOpacity>
+        </CardButton>
       </View>
     </View>
   );

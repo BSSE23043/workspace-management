@@ -4,11 +4,14 @@ import {
   Text,
   Modal, // pop ups
   StyleSheet,
-  TouchableOpacity,
   Pressable,
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import Icon from './Icon';
+import IconButton from './IconButton';
+import ChipButton from './ChipButton';
+import CardButton from './CardButton';
+import AppButton from './AppButton';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -122,22 +125,35 @@ export const DatePickerModal = ({
                 Calendar Picker
               </Text>
             </View>
-            <TouchableOpacity onPress={handleJumpToToday} style={[styles.todayBadge, { backgroundColor: palette.badge }]}>
-              <Text style={[styles.todayBadgeText, { color: palette.primary }]}>Today ({TODAY_BADGE})</Text>
-            </TouchableOpacity>
+            <ChipButton
+              label={`Today (${TODAY_BADGE})`}
+              onPress={handleJumpToToday}
+              unselectedStyle={{ backgroundColor: palette.badge, borderWidth: 0 }}
+              textStyle={{ color: palette.primary, fontSize: 11, fontWeight: '700' }}
+            />
           </View>
 
           {/* Month / Year Navigator */}
           <View style={[styles.navRow, { backgroundColor: palette.background, borderColor: palette.cardBorder }]}>
-            <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton} accessibilityLabel="Previous month">
-              <Icon name="arrow-back" size={18} color={palette.textPrimary} />
-            </TouchableOpacity>
+            <IconButton
+              icon="arrow-back"
+              size={18}
+              buttonSize={32}
+              color={palette.textPrimary}
+              onPress={handlePrevMonth}
+              accessibilityLabel="Previous month"
+            />
             <Text style={[styles.navMonthYear, { color: palette.textPrimary }]}>
               {MONTH_NAMES[currentMonth]} {currentYear}
             </Text>
-            <TouchableOpacity onPress={handleNextMonth} style={styles.navButton} accessibilityLabel="Next month">
-              <Icon name="chevron-forward" size={18} color={palette.textPrimary} />
-            </TouchableOpacity>
+            <IconButton
+              icon="chevron-forward"
+              size={18}
+              buttonSize={32}
+              color={palette.textPrimary}
+              onPress={handleNextMonth}
+              accessibilityLabel="Next month"
+            />
           </View>
 
           {/* Day of Week Row */}
@@ -162,7 +178,7 @@ export const DatePickerModal = ({
                 cell.day === TODAY_DAY;
 
               return (
-                <TouchableOpacity
+                <CardButton
                   key={cell.key}
                   style={[
                     styles.dayCell,
@@ -182,7 +198,7 @@ export const DatePickerModal = ({
                   >
                     {cell.day}
                   </Text>
-                </TouchableOpacity>
+                </CardButton>
               );
             })}
           </View>
@@ -200,19 +216,22 @@ export const DatePickerModal = ({
 
           {/* Action Buttons */}
           <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={[styles.cancelBtn, { borderColor: palette.cardBorder }]}
+            <AppButton
+              title="Cancel"
+              variant="outline"
+              size="lg"
+              style={{ flex: 1 }}
+              textStyle={{ color: palette.textSecondary, fontWeight: '600' }}
               onPress={onClose}
-            >
-              <Text style={[styles.cancelBtnText, { color: palette.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
+            />
 
-            <TouchableOpacity
-              style={[styles.confirmBtn, { backgroundColor: palette.primary }]}
+            <AppButton
+              title="Apply Date"
+              variant="primary"
+              size="lg"
+              style={{ flex: 1 }}
               onPress={handleConfirm}
-            >
-              <Text style={styles.confirmBtnText}>Apply Date</Text>
-            </TouchableOpacity>
+            />
           </View>
         </Pressable>
       </Pressable>
@@ -254,15 +273,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  todayBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  todayBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -272,12 +282,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     marginBottom: 12,
-  },
-  navButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   navMonthYear: {
     fontSize: 15,
@@ -327,30 +331,6 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     gap: 10,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
   },
 });
 

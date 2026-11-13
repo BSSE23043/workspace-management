@@ -4,13 +4,15 @@ import {
   Text,
   StyleSheet,
   SectionList,
-  TouchableOpacity,
   RefreshControl,
   Alert,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
+import CardButton from '../../components/common/CardButton';
+import ChipButton from '../../components/common/ChipButton';
 import Icon from '../../components/common/Icon';
 import DatePickerModal from '../../components/common/DatePickerModal';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
@@ -280,39 +282,39 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
 
       {/* Date Stepper Bar with Calendar Picker */}
       <View style={[styles.dateBar, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
-        <TouchableOpacity
+        <AppButton
+          title="<"
+          variant="soft"
+          size="xs"
           style={styles.stepBtn}
           onPress={() => setSelectedDate((d) => shiftDate(d, -1))}
-          accessibilityLabel="Previous Day"
-        >
-          <Text style={styles.stepBtnText}>&lt;</Text>
-        </TouchableOpacity>
+        />
 
-        <TouchableOpacity
+        <CardButton
           style={styles.dateDisplay}
           onPress={() => setCalendarVisible(true)}
-          activeOpacity={0.7}
-          accessibilityLabel="Open Calendar Date Picker"
         >
           <Icon name="calendar" size={16} color={palette.primary} />
           <Text style={[styles.dateDisplayText, { color: palette.textPrimary }]}>{formattedDisplayDate}</Text>
           <Icon name="chevron-down" size={14} color={palette.textSecondary} />
-        </TouchableOpacity>
+        </CardButton>
 
-        <TouchableOpacity
+        <AppButton
+          title=">"
+          variant="soft"
+          size="xs"
           style={styles.stepBtn}
           onPress={() => setSelectedDate((d) => shiftDate(d, 1))}
-          accessibilityLabel="Next Day"
-        >
-          <Text style={styles.stepBtnText}>&gt;</Text>
-        </TouchableOpacity>
+        />
 
-        <TouchableOpacity
-          style={[styles.todayBtn, { backgroundColor: palette.primary }]}
+        <AppButton
+          title="Today"
+          variant="primary"
+          size="xs"
+          style={styles.todayBtn}
+          textStyle={styles.todayBtnText}
           onPress={() => setSelectedDate(deviceToday)}
-        >
-          <Text style={styles.todayBtnText}>Today</Text>
-        </TouchableOpacity>
+        />
       </View>
 
       {/* Status Filter Pills */}
@@ -320,25 +322,15 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
         {statusPills.map((pill) => {
           const isSelected = selectedStatus === pill.id;
           return (
-            <TouchableOpacity
+            <ChipButton
               key={pill.id}
-              style={[
-                styles.filterPill,
-                isSelected
-                  ? { backgroundColor: palette.primary, borderColor: palette.primary }
-                  : { backgroundColor: palette.card, borderColor: palette.cardBorder },
-              ]}
+              variant="pill"
+              selected={isSelected}
+              label={`${pill.label} (${pill.count})`}
               onPress={() => setSelectedStatus(pill.id)}
-            >
-              <Text
-                style={[
-                  styles.filterPillText,
-                  isSelected ? { color: '#FFFFFF' } : { color: palette.textSecondary },
-                ]}
-              >
-                {pill.label} ({pill.count})
-              </Text>
-            </TouchableOpacity>
+              activeColor={palette.primary}
+              style={styles.filterPill}
+            />
           );
         })}
       </View>
@@ -391,14 +383,15 @@ export const CompanyAttendanceScreen = ({ navigation }) => {
 
       {/* Bottom Batch Bar */}
       <View style={[styles.bottomBar, { backgroundColor: palette.surface, borderTopColor: palette.cardBorder }]}>
-        <TouchableOpacity
-          style={[styles.batchBtn, { backgroundColor: palette.primary }]}
+        <AppButton
+          title="Audit Day Log"
+          variant="primary"
+          size="md"
+          icon="shield-checkmark"
+          style={styles.batchBtn}
+          textStyle={styles.batchBtnText}
           onPress={handleAuditDayLog}
-          activeOpacity={0.85}
-        >
-          <Icon name="shield-checkmark" size={16} color="#FFFFFF" />
-          <Text style={styles.batchBtnText}>Audit Day Log</Text>
-        </TouchableOpacity>
+        />
       </View>
     </View>
   );

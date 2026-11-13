@@ -4,11 +4,12 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
 } from 'react-native';
 import { loadTickets } from '../../services/ticketService';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
+import CardButton from '../../components/common/CardButton';
+import ChipButton from '../../components/common/ChipButton';
 import Icon from '../../components/common/Icon';
 
 export const HRTicketListScreen = ({ navigation }) => {
@@ -45,10 +46,9 @@ export const HRTicketListScreen = ({ navigation }) => {
 
   const renderItem = ({ item }) => {
     return (
-      <TouchableOpacity
+      <CardButton
         style={[styles.ticketCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
         onPress={() => navigation.navigate('HRTicketDetail', { ticketId: item.id })}
-        activeOpacity={0.8}
       >
         <View style={styles.cardHeaderRow}>
           <View style={styles.headerLeft}>
@@ -91,7 +91,7 @@ export const HRTicketListScreen = ({ navigation }) => {
             <Text style={[styles.userName, { color: palette.textPrimary }]}>{item.userName}</Text>
           </View>
         </View>
-      </TouchableOpacity>
+      </CardButton>
     );
   };
 
@@ -112,25 +112,15 @@ export const HRTicketListScreen = ({ navigation }) => {
         {STATUS_TABS.map((tab) => {
           const isSelected = selectedStatus === tab.id;
           return (
-            <TouchableOpacity
+            <ChipButton
               key={tab.id}
-              style={[
-                styles.tabBtn,
-                isSelected
-                  ? { backgroundColor: palette.primary, borderColor: palette.primary }
-                  : { backgroundColor: palette.card, borderColor: palette.cardBorder },
-              ]}
+              variant="tab"
+              selected={isSelected}
+              label={`${tab.label} ${tab.count !== undefined ? `(${tab.count})` : ''}`}
               onPress={() => setSelectedStatus(tab.id)}
-            >
-              <Text
-                style={[
-                  styles.tabBtnText,
-                  isSelected ? { color: '#FFFFFF' } : { color: palette.textSecondary },
-                ]}
-              >
-                {tab.label} {tab.count !== undefined ? `(${tab.count})` : ''}
-              </Text>
-            </TouchableOpacity>
+              activeColor={palette.primary}
+              style={styles.tabBtn}
+            />
           );
         })}
       </View>

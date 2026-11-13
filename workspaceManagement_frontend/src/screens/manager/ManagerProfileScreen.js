@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Image,
   Switch,
   Alert,
@@ -14,6 +13,7 @@ import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 import { getAvatarSource } from '../../assets/images';
 import { pickProfilePictureFromGallery } from '../../utils/imagePicker';
 
@@ -55,12 +55,12 @@ export const ManagerProfileScreen = ({ navigation }) => {
               source={getAvatarSource(currentUser?.avatarKey || currentUser?.avatarCustomUri)}
               style={styles.avatarImg}
             />
-            <TouchableOpacity
+            <CardButton
               style={[styles.cameraBadge, { backgroundColor: palette.primary }]}
               onPress={handleChangeDp}
             >
               <Icon name="camera" size={14} color="#FFFFFF" />
-            </TouchableOpacity>
+            </CardButton>
           </View>
 
           <Text style={[styles.userName, { color: palette.textPrimary }]}>{currentUser?.name}</Text>
@@ -151,10 +151,10 @@ export const ManagerProfileScreen = ({ navigation }) => {
 
         {/* Logout */}
         <View style={styles.bottomActions}>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <CardButton style={styles.logoutBtn} onPress={handleLogout}>
             <Icon name="log-out" size={16} color="#DC2626" />
             <Text style={styles.logoutBtnText}>Sign Out of Manager Account</Text>
-          </TouchableOpacity>
+          </CardButton>
         </View>
       </ScrollView>
     </View>

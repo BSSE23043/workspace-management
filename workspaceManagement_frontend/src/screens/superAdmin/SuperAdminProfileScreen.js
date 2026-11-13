@@ -7,13 +7,14 @@
 // matching the style of the other role profile screens.
 // ============================================================================
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, Image, Alert } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import { getAvatarSource } from '../../assets/images';
 import { ROLE_THEMES } from '../../utils/permissions';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 
 export const SuperAdminProfileScreen = ({ navigation }) => {
   const { currentUser, logout } = useAuth();
@@ -117,14 +118,14 @@ export const SuperAdminProfileScreen = ({ navigation }) => {
         </View>
 
         {/* Logout Button */}
-        <TouchableOpacity
+        <CardButton
           style={styles.logoutBtn}
           onPress={handleLogout}
           activeOpacity={0.85}
         >
           <Icon name="log-out" size={16} color="#DC2626" />
           <Text style={styles.logoutBtnText}>Log Out of Platform</Text>
-        </TouchableOpacity>
+        </CardButton>
       </ScrollView>
     </View>
   );

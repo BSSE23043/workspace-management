@@ -3,19 +3,20 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Image,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ActivityIndicator,
   Animated,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import { IMAGES } from '../../assets/images';
 import AppInput from '../../components/common/AppInput';
+import AppButton from '../../components/common/AppButton';
+import CardButton from '../../components/common/CardButton';
+import TextButton from '../../components/common/TextButton';
 import Icon from '../../components/common/Icon';
 import { isValidEmail, isValidPassword } from '../../utils/validation';
 
@@ -243,10 +244,11 @@ export const LoginScreen = () => {
 
           {/* Options Row */}
           <View style={styles.optionsRow}>
-            <TouchableOpacity
+            <CardButton
               style={styles.checkboxRow}
               onPress={() => setRememberDevice(!rememberDevice)}
               activeOpacity={0.7}
+              accessibilityLabel="Remember this device"
             >
               <View style={[styles.checkbox, rememberDevice && styles.checkboxActive]}>
                 {rememberDevice && <Icon name="checkmark" size={12} color="#FFFFFF" />}
@@ -254,29 +256,26 @@ export const LoginScreen = () => {
               <Text style={[styles.checkboxLabel, isDark && styles.textMuted]}>
                 Remember this device
               </Text>
-            </TouchableOpacity>
+            </CardButton>
 
-            <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7}>
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
+            <TextButton
+              title="Forgot Password?"
+              onPress={handleForgotPassword}
+              textStyle={styles.forgotPasswordText}
+            />
           </View>
 
           {/* Sign In Button */}
-          <TouchableOpacity
-            style={[styles.signInBtn, loading && styles.signInBtnDisabled]}
+          <AppButton
+            title="Sign In"
+            variant="dark"
+            size="lg"
+            icon="chevron-forward"
+            iconPosition="right"
+            loading={loading}
+            fullWidth
             onPress={handleSignIn}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <View style={styles.btnContent}>
-                <Text style={styles.signInBtnText}>Sign In</Text>
-                <Icon name="chevron-forward" size={18} color="#FFFFFF" />
-              </View>
-            )}
-          </TouchableOpacity>
+          />
         </Animated.View>
 
         {/* No Self Sign-Up Card — Accounts are issued by the WMS platform team.
@@ -462,27 +461,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#2563EB',
     fontWeight: '600',
-  },
-  signInBtn: {
-    backgroundColor: '#1E293B',
-    borderRadius: 10,
-    paddingVertical: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signInBtnDisabled: {
-    opacity: 0.7,
-  },
-  btnContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  signInBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
   },
   dividerRow: {
     flexDirection: 'row',

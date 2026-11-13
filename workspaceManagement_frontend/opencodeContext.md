@@ -834,3 +834,9 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
 - **2026-10-19** — Initialized `opencodeContext.md` from full codebase exploration on branch `Umar`
   (HEAD `a0d5701` "Some bugs fixed"; tree clean). Context reflects post-merge state of Samer's work
   ("App Uploaded", "feat(code): pushed the code that samer made") as currently checked out.
+
+- **2026-11-13** - **Converted all TouchableOpacity/Pressable button patterns to reusable components.
+  - Added AppButton, IconButton, ChipButton, CardButton, and TextButton under src/components/common/.
+  - Converted shared components (AppInput, HeaderBar, DatePickerModal) and all portal screens (auth, admin, employee, HR, manager, client, super-admin) plus AdminDrawerNavigator.
+  - Removed all raw TouchableOpacity/Pressable usage and obsolete button styles.
+  - Verified syntax with @babel/parser walker: **TOTAL FILES 75, FAILURES 0**.

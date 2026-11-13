@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
@@ -14,6 +13,7 @@ import { loadRequirements } from '../../services/requirementService';
 import { loadAttendance } from '../../services/attendanceService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 
 export const ManagerDashboardScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
@@ -119,13 +119,13 @@ export const ManagerDashboardScreen = ({ navigation }) => {
               {conflictingTasks[0]?.conflictDetails || 'A team task is scheduled past its client deadline.'}
             </Text>
 
-            <TouchableOpacity
+            <CardButton
               style={styles.reviewTaskBtn}
               onPress={() => navigation.navigate('Tasks')}
               activeOpacity={0.8}
             >
               <Text style={styles.reviewTaskBtnText}>Review &amp; Reschedule Task →</Text>
-            </TouchableOpacity>
+            </CardButton>
           </View>
         )}
 
@@ -159,7 +159,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
           Management Controls
         </Text>
         <View style={styles.controlsList}>
-          <TouchableOpacity
+          <CardButton
             style={[styles.controlRow, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
             onPress={() => navigation.navigate('Team & Leave')}
           >
@@ -171,13 +171,13 @@ export const ManagerDashboardScreen = ({ navigation }) => {
               <Text style={[styles.controlSub, { color: palette.textSecondary }]}>Filter direct reports & daily presence audit</Text>
             </View>
             <Icon name="chevron-forward" size={16} color="#94A3B8" />
-          </TouchableOpacity>
+          </CardButton>
 
           {/* "Leave Review & Approvals" row removed from the dashboard —
               the Team & Leave screen itself is still reachable from the
               Team Attendance row and the manager drawer. */}
 
-          <TouchableOpacity
+          <CardButton
             style={[styles.controlRow, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
             onPress={() => navigation.navigate('Tasks')}
           >
@@ -189,9 +189,9 @@ export const ManagerDashboardScreen = ({ navigation }) => {
               <Text style={[styles.controlSub, { color: palette.textSecondary }]}>Create tasks, resolve slack & audit progress</Text>
             </View>
             <Icon name="chevron-forward" size={16} color="#94A3B8" />
-          </TouchableOpacity>
+          </CardButton>
 
-          <TouchableOpacity
+          <CardButton
             style={[styles.controlRow, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
             onPress={() => navigation.navigate('Requirements')}
           >
@@ -203,7 +203,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
               <Text style={[styles.controlSub, { color: palette.textSecondary }]}>Create requirements, manage milestones & broadcasts</Text>
             </View>
             <Icon name="chevron-forward" size={16} color="#94A3B8" />
-          </TouchableOpacity>
+          </CardButton>
         </View>
 
         {/* Recent Team Tasks */}

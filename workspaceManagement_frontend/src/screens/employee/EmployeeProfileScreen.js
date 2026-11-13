@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Image,
   Switch,
   Alert,
@@ -13,6 +12,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
+import AppButton from '../../components/common/AppButton';
+import IconButton from '../../components/common/IconButton';
 import Icon from '../../components/common/Icon';
 import { getAvatarSource } from '../../assets/images';
 import { pickProfilePictureFromGallery } from '../../utils/imagePicker';
@@ -56,12 +57,16 @@ export const EmployeeProfileScreen = ({ navigation }) => {
               style={styles.avatarImg}
             />
             {/* Active DP change badge for Employee */}
-            <TouchableOpacity
-              style={[styles.cameraBadge, { backgroundColor: palette.primary }]}
+            <IconButton
+              icon="camera"
+              size={14}
+              buttonSize={26}
+              borderRadius={13}
+              variant="primary"
+              style={styles.cameraBadge}
               onPress={handleChangeDp}
-            >
-              <Icon name="camera" size={14} color="#FFFFFF" />
-            </TouchableOpacity>
+              accessibilityLabel="Change profile picture"
+            />
           </View>
 
           <Text style={[styles.userName, { color: palette.textPrimary }]}>{currentUser?.name || 'Team Member'}</Text>
@@ -154,10 +159,14 @@ export const EmployeeProfileScreen = ({ navigation }) => {
 
         {/* Terminate Session */}
         <View style={styles.bottomActions}>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-            <Icon name="log-out" size={16} color="#DC2626" />
-            <Text style={styles.logoutBtnText}>Terminate Session / Log Out</Text>
-          </TouchableOpacity>
+          <AppButton
+            title="Terminate Session / Log Out"
+            variant="dangerSoft"
+            size="md"
+            icon="log-out"
+            fullWidth
+            onPress={handleLogout}
+          />
         </View>
       </ScrollView>
     </View>
@@ -277,22 +286,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   switchRoleText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    borderRadius: 8,
-    paddingVertical: 12,
-  },
-  logoutBtnText: {
-    color: '#DC2626',
     fontSize: 13,
     fontWeight: '700',
   },

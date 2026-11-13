@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Image,
   Switch,
   Alert,
@@ -13,7 +12,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
-import Icon from '../../components/common/Icon';
+import AppButton from '../../components/common/AppButton';
+import IconButton from '../../components/common/IconButton';
 import { getAvatarSource } from '../../assets/images';
 import { pickProfilePictureFromGallery } from '../../utils/imagePicker';
 
@@ -71,12 +71,16 @@ export const AdminProfileScreen = ({ navigation }) => {
               source={getAvatarSource(currentUser?.avatarKey || currentUser?.avatarCustomUri)}
               style={styles.avatarImg}
             />
-            <TouchableOpacity
-              style={[styles.cameraBadge, { backgroundColor: palette.primary }]}
+            <IconButton
+              icon="camera"
+              size={14}
+              buttonSize={26}
+              borderRadius={13}
+              variant="primary"
+              style={styles.cameraBadge}
               onPress={handleChangeDp}
-            >
-              <Icon name="camera" size={14} color="#FFFFFF" />
-            </TouchableOpacity>
+              accessibilityLabel="Change profile picture"
+            />
           </View>
 
           <Text style={[styles.userName, { color: palette.textPrimary }]}>{currentUser?.name}</Text>
@@ -124,12 +128,14 @@ export const AdminProfileScreen = ({ navigation }) => {
             editable={true}
           />
 
-          <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: palette.primary }]}
+          <AppButton
+            title="Save Profile Changes"
+            variant="primary"
+            size="lg"
+            fullWidth
+            style={{ marginTop: 4 }}
             onPress={handleSaveProfile}
-          >
-            <Text style={styles.saveBtnText}>Save Profile Changes</Text>
-          </TouchableOpacity>
+          />
         </View>
 
         {/* Security & System Preferences */}
@@ -155,13 +161,14 @@ export const AdminProfileScreen = ({ navigation }) => {
         </View>
 
         {/* Sign Out Button */}
-        <TouchableOpacity
-          style={styles.logoutBtn}
+        <AppButton
+          title="Sign Out of Admin Session"
+          variant="dangerSoft"
+          size="lg"
+          icon="log-out"
+          fullWidth
           onPress={handleLogout}
-        >
-          <Icon name="log-out" size={16} color="#DC2626" />
-          <Text style={styles.logoutBtnText}>Sign Out of Admin Session</Text>
-        </TouchableOpacity>
+        />
       </ScrollView>
     </View>
   );
@@ -238,17 +245,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 14,
   },
-  saveBtn: {
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
   prefRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -262,22 +258,6 @@ const styles = StyleSheet.create({
   prefSub: {
     fontSize: 11,
     marginTop: 2,
-  },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    borderRadius: 10,
-    paddingVertical: 13,
-  },
-  logoutBtnText: {
-    color: '#DC2626',
-    fontSize: 13,
-    fontWeight: '700',
   },
 });
 

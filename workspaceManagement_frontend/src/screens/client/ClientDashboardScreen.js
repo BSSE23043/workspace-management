@@ -4,13 +4,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import { loadRequirements } from '../../services/requirementService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 
 export const ClientDashboardScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
@@ -131,7 +131,7 @@ export const ClientDashboardScreen = ({ navigation }) => {
           clientRequirements.map((req) => {
             const latestBroadcast = req.broadcasts?.[0];
             return (
-              <TouchableOpacity
+              <CardButton
                 key={req.id}
                 style={[styles.broadcastCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
                 onPress={() => navigation.navigate('Milestones')}
@@ -159,7 +159,7 @@ export const ClientDashboardScreen = ({ navigation }) => {
                     View Milestones →
                   </Text>
                 </View>
-              </TouchableOpacity>
+              </CardButton>
             );
           })
           )}

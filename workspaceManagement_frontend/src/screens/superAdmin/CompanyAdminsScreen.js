@@ -16,7 +16,6 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -27,6 +26,7 @@ import { isValidEmail, isValidPassword } from '../../utils/validation';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 
 export const CompanyAdminsScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
@@ -178,14 +178,14 @@ export const CompanyAdminsScreen = ({ navigation }) => {
       </View>
 
       {/* Remove button (trash icon) */}
-      <TouchableOpacity
+      <CardButton
         style={styles.removeButton}
         onPress={() => handleRemoveAdmin(item)}
         activeOpacity={0.7}
         accessibilityLabel={`Remove ${item.name}`}
       >
         <Icon name="trash" size={18} color="#DC2626" />
-      </TouchableOpacity>
+      </CardButton>
     </View>
   );
 
@@ -285,14 +285,14 @@ export const CompanyAdminsScreen = ({ navigation }) => {
                   }
                 />
 
-                <TouchableOpacity
+                <CardButton
                   style={[styles.addBtn, { backgroundColor: palette.primary }]}
                   onPress={handleAddAdmin}
                   activeOpacity={0.85}
                 >
                   <Icon name="add" size={18} color="#FFFFFF" />
                   <Text style={styles.addBtnText}>Create Company Admin</Text>
-                </TouchableOpacity>
+                </CardButton>
               </View>
 
               {/* Section title above the admin list */}

@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DrawerActions } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import { getAvatarSource, IMAGES } from '../../assets/images';
-import Icon from './Icon';
+import IconButton from './IconButton';
+import CardButton from './CardButton';
 
 export const HeaderBar = ({
   title,
@@ -58,23 +59,25 @@ export const HeaderBar = ({
     >
       <View style={styles.leftRow}>
         {showBack ? (
-          <TouchableOpacity
+          <IconButton
+            icon="arrow-back"
+            size={24}
+            buttonSize={40}
+            color={palette.textPrimary}
             style={styles.iconButton}
             onPress={() => navigation && navigation.goBack()}
-            accessibilityRole="button"
             accessibilityLabel="Go Back"
-          >
-            <Icon name="arrow-back" size={24} color={palette.textPrimary} />
-          </TouchableOpacity>
+          />
         ) : isAdmin ? (
-          <TouchableOpacity
+          <IconButton
+            icon="menu"
+            size={24}
+            buttonSize={40}
+            color={palette.textPrimary}
             style={styles.iconButton}
             onPress={() => navigation && navigation.dispatch(DrawerActions.openDrawer())}
-            accessibilityRole="button"
             accessibilityLabel="Open Navigation Drawer"
-          >
-            <Icon name="menu" size={24} color={palette.textPrimary} />
-          </TouchableOpacity>
+          />
         ) : null}
 
         <View style={styles.titleContainer}>
@@ -108,18 +111,17 @@ export const HeaderBar = ({
           rightAction
         ) : showBack ? null : (
           <>
-            <TouchableOpacity
+            <CardButton
               style={[styles.avatarButton, { borderColor: palette.primary }]}
               onPress={handleAvatarPress}
               activeOpacity={0.8}
-              accessibilityRole="button"
               accessibilityLabel="View Profile"
             >
               {/* <Image
                 source={getAvatarSource(currentUser?.avatarKey || currentUser?.avatarCustomUri)}
                 style={styles.avatarImage}
               /> */}
-            </TouchableOpacity>
+            </CardButton>
           </>
         )}
       </View>

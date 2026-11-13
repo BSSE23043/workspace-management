@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Image,
   Switch,
   Alert,
@@ -13,7 +12,9 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
-import Icon from '../../components/common/Icon';
+import AppButton from '../../components/common/AppButton';
+import ChipButton from '../../components/common/ChipButton';
+import CardButton from '../../components/common/CardButton';
 import { getAvatarSource } from '../../assets/images';
 import { isValidEmail } from '../../utils/validation';
 import { pickProfilePictureFromGallery } from '../../utils/imagePicker';
@@ -212,13 +213,14 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
               style={styles.dpLargePreview}
             />
             <View style={styles.dpActionsCol}>
-              <TouchableOpacity
-                style={[styles.changeDpBtn, { backgroundColor: palette.primary }]}
+              <AppButton
+                title="Change Employee DP"
+                variant="primary"
+                size="sm"
+                icon="camera"
+                style={{ marginBottom: 4, borderRadius: 8, paddingVertical: 9 }}
                 onPress={handlePickEmployeeDp}
-              >
-                <Icon name="camera" size={15} color="#FFFFFF" />
-                <Text style={styles.changeDpBtnText}>Change Employee DP</Text>
-              </TouchableOpacity>
+              />
               <Text style={[styles.dpHintText, { color: palette.textSecondary }]}>
                 Pick a photo from the device gallery
               </Text>
@@ -272,7 +274,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
             {SYSTEM_ROLES.map((r) => {
               const isSelected = role === r.id;
               return (
-                <TouchableOpacity
+                <CardButton
                   key={r.id}
                   style={[
                     styles.roleRadioCard,
@@ -289,7 +291,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
                     <Text style={[styles.roleRadioLabel, { color: palette.textPrimary }]}>{r.label}</Text>
                   </View>
                   <Text style={[styles.roleRadioDesc, { color: palette.textSecondary }]}>{r.desc}</Text>
-                </TouchableOpacity>
+                </CardButton>
               );
             })}
           </View>
@@ -310,19 +312,15 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
                 {managerOptions.map((mgr) => {
                   const isSelected = selectedManagerId === mgr.id;
                   return (
-                    <TouchableOpacity
+                    <ChipButton
                       key={mgr.id}
-                      style={[
-                        styles.deptSelectChip,
-                        { borderColor: palette.cardBorder },
-                        isSelected && { backgroundColor: '#1D4ED8', borderColor: '#1D4ED8' },
-                      ]}
+                      label={`${mgr.name} (${mgr.role})`}
+                      selected={isSelected}
+                      activeColor="#1D4ED8"
+                      style={{ paddingHorizontal: 12, paddingVertical: 7 }}
+                      textStyle={{ color: isSelected ? '#FFFFFF' : palette.textPrimary }}
                       onPress={() => setSelectedManagerId(mgr.id)}
-                    >
-                      <Text style={[styles.deptSelectText, isSelected ? { color: '#FFFFFF' } : { color: palette.textPrimary }]}>
-                        {mgr.name} ({mgr.role})
-                      </Text>
-                    </TouchableOpacity>
+                    />
                   );
                 })}
               </View>
@@ -356,13 +354,13 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
         </View>
 
         {/* Save User Record Button */}
-        <TouchableOpacity
-          style={[styles.saveRecordBtn, { backgroundColor: palette.primary }]}
+        <AppButton
+          title="Save User Record"
+          variant="primary"
+          size="lg"
+          fullWidth
           onPress={handleSave}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.saveRecordBtnText}>Save User Record</Text>
-        </TouchableOpacity>
+        />
       </ScrollView>
     </View>
   );
@@ -406,21 +404,6 @@ const styles = StyleSheet.create({
   },
   dpActionsCol: {
     flex: 1,
-  },
-  changeDpBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 6,
-    marginBottom: 4,
-  },
-  changeDpBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
   },
   dpHintText: {
     fontSize: 11,
@@ -471,16 +454,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  deptSelectChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  deptSelectText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
   hierarchyWarning: {
     color: '#EF4444',
     fontSize: 11,
@@ -502,17 +475,6 @@ const styles = StyleSheet.create({
   activeToggleSub: {
     fontSize: 11,
     marginTop: 2,
-  },
-  saveRecordBtn: {
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveRecordBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
   },
 });
 

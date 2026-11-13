@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
 } from 'react-native';
@@ -16,6 +15,7 @@ import {
 } from '../../services/requirementService';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
+import CardButton from '../../components/common/CardButton';
 // Shared "time ago" label so broadcasts and replies show their real age.
 import { timeAgo } from '../../utils/timeAgo';
 
@@ -103,7 +103,7 @@ export const MyRequirementsScreen = ({ navigation }) => {
         {FILTER_TABS.map((tab) => {
           const isSelected = selectedTab === tab;
           return (
-            <TouchableOpacity
+            <CardButton
               key={tab}
               style={[
                 styles.tabBtn,
@@ -121,7 +121,7 @@ export const MyRequirementsScreen = ({ navigation }) => {
               >
                 {tab}
               </Text>
-            </TouchableOpacity>
+            </CardButton>
           );
         })}
       </View>
@@ -231,12 +231,12 @@ export const MyRequirementsScreen = ({ navigation }) => {
                 placeholderTextColor="#94A3B8"
                 style={[styles.replyInput, { backgroundColor: palette.inputBackground, borderColor: palette.inputBorder, color: palette.textPrimary }]}
               />
-              <TouchableOpacity
+              <CardButton
                 style={[styles.sendReplyBtn, { backgroundColor: palette.primary }]}
                 onPress={handleSendClarification}
               >
                 <Text style={styles.sendReplyText}>Send</Text>
-              </TouchableOpacity>
+              </CardButton>
             </View>
           </View>
         )}
@@ -256,7 +256,7 @@ export const MyRequirementsScreen = ({ navigation }) => {
               Other Requirements &amp; Modules
             </Text>
             {otherReqs.map((req) => (
-              <TouchableOpacity
+              <CardButton
                 key={req.id}
                 style={[styles.otherReqCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
                 activeOpacity={0.85}
@@ -275,7 +275,7 @@ export const MyRequirementsScreen = ({ navigation }) => {
                 <Text style={[styles.otherReqOpen, { color: palette.primary }]}>
                   Tap to view details →
                 </Text>
-              </TouchableOpacity>
+              </CardButton>
             ))}
           </>
         )}

@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
+import AppButton from '../../components/common/AppButton';
 import Icon from '../../components/common/Icon';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import { loadTickets } from '../../services/ticketService';
@@ -195,22 +195,22 @@ export const HRDashboardScreen = ({ navigation }) => {
                     </Text>
                   </View>
 
-                  {leave.status === 'PENDING' ? (
-                    <View style={styles.leaveActions}>
-                      <TouchableOpacity
-                        style={[styles.leaveApproveBtn, { backgroundColor: '#16A34A' }]}
-                        onPress={() => handleHrApprove(leave)}
-                      >
-                        <Text style={styles.leaveBtnText}>Approve</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.leaveRejectBtn}
-                        onPress={() => handleHrReject(leave)}
-                      >
-                        <Text style={styles.leaveRejectText}>Reject</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
+                    {leave.status === 'PENDING' ? (
+                      <View style={styles.leaveActions}>
+                        <AppButton
+                          title="Approve"
+                          variant="success"
+                          size="xs"
+                          onPress={() => handleHrApprove(leave)}
+                        />
+                        <AppButton
+                          title="Reject"
+                          variant="dangerSoft"
+                          size="xs"
+                          onPress={() => handleHrReject(leave)}
+                        />
+                      </View>
+                    ) : (
                     <View
                       style={[
                         styles.leaveStatusPill,
@@ -249,14 +249,14 @@ export const HRDashboardScreen = ({ navigation }) => {
             {openTickets} Active Inquiries • {correctionsToday} Attendance Corrections Today
           </Text>
 
-          <TouchableOpacity
-            style={[styles.actionBtnOutline, { borderColor: palette.primary }]}
+          <AppButton
+            title="Review Ticket Queue →"
+            variant="secondary"
+            size="md"
+            style={styles.actionBtnOutline}
+            textStyle={styles.actionBtnOutlineText}
             onPress={() => navigation.navigate('Tickets')}
-          >
-            <Text style={[styles.actionBtnOutlineText, { color: palette.primary }]}>
-              Review Ticket Queue →
-            </Text>
-          </TouchableOpacity>
+          />
         </View>
 
         {/* Cycle Deductions Card */}
@@ -284,12 +284,14 @@ export const HRDashboardScreen = ({ navigation }) => {
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.primaryActionBtn, { backgroundColor: palette.primary }]}
+          <AppButton
+            title="Configure Deduction Policies >"
+            variant="primary"
+            size="md"
+            style={styles.primaryActionBtn}
+            textStyle={styles.primaryActionBtnText}
             onPress={() => navigation.navigate('SalaryConfig')}
-          >
-            <Text style={styles.primaryActionBtnText}>Configure Deduction Policies &gt;</Text>
-          </TouchableOpacity>
+          />
         </View>
 
         {/* Recent Ticket Activity */}

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Image,
   Alert,
   Modal,
@@ -13,6 +12,10 @@ import { useTheme } from '../../hooks/useTheme';
 import { loadCompanyProfile, saveCompanyProfile } from '../../services/companyService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
+import AppButton from '../../components/common/AppButton';
+import ChipButton from '../../components/common/ChipButton';
+import CardButton from '../../components/common/CardButton';
+import IconButton from '../../components/common/IconButton';
 import Icon from '../../components/common/Icon';
 import { IMAGES } from '../../assets/images';
 
@@ -128,25 +131,14 @@ export const CompanyProfileScreen = ({ navigation }) => {
             {ALL_DAYS.map((d) => {
               const active = workingDays.includes(d.key);
               return (
-                <TouchableOpacity
+                <ChipButton
                   key={d.key}
-                  style={[
-                    styles.dayPill,
-                    active
-                      ? { backgroundColor: palette.primary, borderColor: palette.primary }
-                      : { backgroundColor: palette.inputBackground, borderColor: palette.cardBorder },
-                  ]}
+                  label={d.label}
+                  variant="day"
+                  selected={active}
+                  unselectedStyle={{ backgroundColor: palette.inputBackground }}
                   onPress={() => toggleDay(d.key)}
-                >
-                  <Text
-                    style={[
-                      styles.dayText,
-                      active ? { color: '#FFFFFF' } : { color: palette.textSecondary },
-                    ]}
-                  >
-                    {d.label}
-                  </Text>
-                </TouchableOpacity>
+                />
               );
             })}
           </View>
@@ -162,7 +154,7 @@ export const CompanyProfileScreen = ({ navigation }) => {
           </Text>
 
           {/* Map Preview Container with dashed radius circle and pin */}
-          <TouchableOpacity
+          <CardButton
             style={styles.mapContainer}
             onPress={() => setMapModalVisible(true)}
             activeOpacity={0.9}
@@ -186,17 +178,17 @@ export const CompanyProfileScreen = ({ navigation }) => {
               <Icon name="map" size={14} color="#FFFFFF" />
               <Text style={styles.tapToEditText}>Tap to Open Interactive Map</Text>
             </View>
-          </TouchableOpacity>
+          </CardButton>
 
           {/* Open Map Button */}
-          <TouchableOpacity
-            style={[styles.openMapBtn, { backgroundColor: palette.primary }]}
+          <AppButton
+            title="Open Interactive Map Location Picker"
+            variant="primary"
+            size="md"
+            icon="map"
+            style={{ marginBottom: 12 }}
             onPress={() => setMapModalVisible(true)}
-            activeOpacity={0.8}
-          >
-            <Icon name="map" size={16} color="#FFFFFF" />
-            <Text style={styles.openMapBtnText}>Open Interactive Map Location Picker</Text>
-          </TouchableOpacity>
+          />
 
           {/* Quick Campus Presets */}
           <Text style={[styles.presetLabel, { color: palette.textSecondary }]}>Quick Campus Presets:</Text>
@@ -204,28 +196,19 @@ export const CompanyProfileScreen = ({ navigation }) => {
             {CAMPUS_PRESETS.map((p) => {
               const isSelected = latitude === String(p.lat) && longitude === String(p.lng);
               return (
-                <TouchableOpacity
+                <ChipButton
                   key={p.name}
-                  style={[
-                    styles.presetChip,
-                    { borderColor: palette.cardBorder, backgroundColor: palette.background },
-                    isSelected && { borderColor: palette.primary, backgroundColor: palette.badge },
-                  ]}
+                  label={p.name}
+                  selected={isSelected}
+                  unselectedStyle={{ backgroundColor: palette.background }}
+                  selectedStyle={{ backgroundColor: palette.badge }}
+                  textStyle={{ color: isSelected ? palette.primary : palette.textPrimary }}
                   onPress={() => {
                     setLatitude(String(p.lat));
                     setLongitude(String(p.lng));
                     setRadius(String(p.radius));
                   }}
-                >
-                  <Text
-                    style={[
-                      styles.presetChipText,
-                      { color: isSelected ? palette.primary : palette.textPrimary },
-                    ]}
-                  >
-                    {p.name}
-                  </Text>
-                </TouchableOpacity>
+                />
               );
             })}
           </View>
@@ -279,15 +262,21 @@ export const CompanyProfileScreen = ({ navigation }) => {
                     Tap anywhere on map or choose campus preset to set geofence
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => setMapModalVisible(false)}>
-                  <Icon name="close" size={22} color={palette.textSecondary} />
-                </TouchableOpacity>
+                <IconButton
+                  icon="close"
+                  size={22}
+                  color={palette.textSecondary}
+                  variant="plain"
+                  onPress={() => setMapModalVisible(false)}
+                  accessibilityLabel="Close map picker"
+                />
               </View>
 
               {/* Interactive Visual Map Area with Tap Detector */}
-              <TouchableOpacity
+              <CardButton
                 style={styles.interactiveMapBox}
                 activeOpacity={0.95}
+                accessibilityLabel="Tap map to reposition geofence"
                 onPress={(evt) => {
                   const { locationX, locationY } = evt.nativeEvent;
                   // Map relative touch coordinates into subtle coordinate adjustments
@@ -314,7 +303,7 @@ export const CompanyProfileScreen = ({ navigation }) => {
                 <View style={styles.mapHintBadge}>
                   <Text style={styles.mapHintText}>📍 Tap map to reposition pin coordinates</Text>
                 </View>
-              </TouchableOpacity>
+              </CardButton>
 
               {/* Current Active Pin Readout */}
               <View style={[styles.coordBanner, { backgroundColor: palette.background, borderColor: palette.cardBorder }]}>
@@ -336,7 +325,7 @@ export const CompanyProfileScreen = ({ navigation }) => {
               <Text style={[styles.presetHeading, { color: palette.textPrimary }]}>Or Select Known Campus:</Text>
               <View style={styles.modalPresetsGrid}>
                 {CAMPUS_PRESETS.map((p) => (
-                  <TouchableOpacity
+                  <CardButton
                     key={p.name}
                     style={[
                       styles.modalPresetBtn,
@@ -353,21 +342,22 @@ export const CompanyProfileScreen = ({ navigation }) => {
                     <Text style={[styles.modalPresetBtnSub, { color: palette.textSecondary }]}>
                       {p.lat}, {p.lng} • {p.radius}m
                     </Text>
-                  </TouchableOpacity>
+                  </CardButton>
                 ))}
               </View>
 
               {/* Apply Button */}
-              <TouchableOpacity
-                style={[styles.applyMapBtn, { backgroundColor: palette.primary }]}
+              <AppButton
+                title="Apply Selected Map Coordinates"
+                variant="primary"
+                size="md"
+                icon="checkmark-circle"
+                fullWidth
                 onPress={() => {
                   setMapModalVisible(false);
                   Alert.alert('Map Location Applied', `Coordinates updated to (${latitude}, ${longitude}) with ${radius}m geofence.`);
                 }}
-              >
-                <Icon name="checkmark-circle" size={18} color="#FFFFFF" />
-                <Text style={styles.applyMapBtnText}>Apply Selected Map Coordinates</Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         </Modal>
@@ -399,13 +389,13 @@ export const CompanyProfileScreen = ({ navigation }) => {
         </View>
 
         {/* Save Configuration Button */}
-        <TouchableOpacity
-          style={[styles.saveBtn, { backgroundColor: palette.primary }]}
+        <AppButton
+          title="Save Configuration"
+          variant="primary"
+          size="lg"
+          fullWidth
           onPress={handleSave}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.saveBtnText}>Save Configuration</Text>
-        </TouchableOpacity>
+        />
       </ScrollView>
     </View>
   );
@@ -444,16 +434,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 6,
-  },
-  dayPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  dayText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   mapContainer: {
     height: 180,
@@ -512,20 +492,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
-  openMapBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-    marginBottom: 12,
-  },
-  openMapBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
   presetLabel: {
     fontSize: 12,
     fontWeight: '600',
@@ -536,16 +502,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
     marginBottom: 14,
-  },
-  presetChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  presetChipText: {
-    fontSize: 11,
-    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
@@ -660,30 +616,6 @@ const styles = StyleSheet.create({
   modalPresetBtnSub: {
     fontSize: 10,
     marginTop: 2,
-  },
-  applyMapBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 6,
-  },
-  applyMapBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  saveBtn: {
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
   },
 });
 

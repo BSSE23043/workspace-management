@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Image,
   Switch,
   Alert,
@@ -13,6 +12,7 @@ import AuthContext from '../../context/AuthContext';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
+import CardButton from '../../components/common/CardButton';
 import Icon from '../../components/common/Icon';
 import { getAvatarSource } from '../../assets/images';
 import { pickProfilePictureFromGallery } from '../../utils/imagePicker';
@@ -111,12 +111,12 @@ export class ProfileSettingsScreen extends React.Component {
                 source={getAvatarSource(currentUser?.avatarKey || currentUser?.avatarCustomUri)}
                 style={styles.avatarImg}
               />
-              <TouchableOpacity
+              <CardButton
                 style={styles.cameraBadge}
                 onPress={this.handleChangeDp}
               >
                 <Icon name="camera" size={14} color="#FFFFFF" />
-              </TouchableOpacity>
+              </CardButton>
             </View>
 
             <Text style={styles.userName}>{currentUser?.name || '—'}</Text>
@@ -178,10 +178,10 @@ export class ProfileSettingsScreen extends React.Component {
           </View>
 
           {/* Sign Out Button */}
-          <TouchableOpacity style={styles.signOutBtn} onPress={this.handleSignOut}>
+          <CardButton style={styles.signOutBtn} onPress={this.handleSignOut}>
             <Icon name="log-out" size={16} color="#DC2626" />
             <Text style={styles.signOutBtnText}>Sign Out of Account</Text>
-          </TouchableOpacity>
+          </CardButton>
         </ScrollView>
       </View>
     );

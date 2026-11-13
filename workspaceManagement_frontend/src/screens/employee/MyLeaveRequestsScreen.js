@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
 } from 'react-native';
@@ -13,6 +12,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
+import AppButton from '../../components/common/AppButton';
+import ChipButton from '../../components/common/ChipButton';
 import Icon from '../../components/common/Icon';
 import DatePickerModal from '../../components/common/DatePickerModal';
 import { validateLeaveDates } from '../../utils/validation';
@@ -107,24 +108,14 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
             {LEAVE_TYPES.map((t) => {
               const isSelected = selectedType === t.id;
               return (
-                <TouchableOpacity
+                <ChipButton
                   key={t.id}
-                  style={[
-                    styles.typeChip,
-                    { borderColor: palette.cardBorder },
-                    isSelected && { backgroundColor: palette.primary, borderColor: palette.primary },
-                  ]}
+                  label={t.label}
+                  selected={isSelected}
+                  style={{ paddingHorizontal: 12, paddingVertical: 9 }}
+                  textStyle={{ color: isSelected ? '#FFFFFF' : palette.textPrimary }}
                   onPress={() => setSelectedType(t.id)}
-                >
-                  <Text
-                    style={[
-                      styles.typeText,
-                      isSelected ? { color: '#FFFFFF' } : { color: palette.textPrimary },
-                    ]}
-                  >
-                    {t.label}
-                  </Text>
-                </TouchableOpacity>
+                />
               );
             })}
           </View>
@@ -133,25 +124,41 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
           <View style={styles.datesRow}>
             <View style={{ flex: 1, marginRight: 8 }}>
               <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>Start Date</Text>
-              <TouchableOpacity
-                style={[styles.datePickerBtn, { backgroundColor: palette.background, borderColor: palette.inputBorder }]}
+              <AppButton
+                title={startDate}
+                variant="ghost"
+                size="md"
+                icon="calendar"
+                style={{
+                  backgroundColor: palette.background,
+                  borderWidth: 1,
+                  borderColor: palette.inputBorder,
+                  justifyContent: 'flex-start',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                }}
+                textStyle={{ color: palette.textPrimary, fontWeight: '600' }}
                 onPress={() => setCalendarField('start')}
-                activeOpacity={0.7}
-              >
-                <Icon name="calendar" size={16} color={palette.primary} />
-                <Text style={[styles.datePickerBtnText, { color: palette.textPrimary }]}>{startDate}</Text>
-              </TouchableOpacity>
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>End Date</Text>
-              <TouchableOpacity
-                style={[styles.datePickerBtn, { backgroundColor: palette.background, borderColor: palette.inputBorder }]}
+              <AppButton
+                title={endDate}
+                variant="ghost"
+                size="md"
+                icon="calendar"
+                style={{
+                  backgroundColor: palette.background,
+                  borderWidth: 1,
+                  borderColor: palette.inputBorder,
+                  justifyContent: 'flex-start',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                }}
+                textStyle={{ color: palette.textPrimary, fontWeight: '600' }}
                 onPress={() => setCalendarField('end')}
-                activeOpacity={0.7}
-              >
-                <Icon name="calendar" size={16} color={palette.primary} />
-                <Text style={[styles.datePickerBtnText, { color: palette.textPrimary }]}>{endDate}</Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
 
@@ -193,13 +200,14 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
             placeholder="Describe urgency and sprint task handover..."
           />
 
-          <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: palette.primary }]}
+          <AppButton
+            title="Submit Leave Request"
+            variant="primary"
+            size="md"
+            fullWidth
+            style={{ marginTop: 4, paddingVertical: 12 }}
             onPress={handleSubmit}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.submitBtnText}>Submit Leave Request</Text>
-          </TouchableOpacity>
+          />
         </View>
 
         {/* My Submitted Requests */}
@@ -293,16 +301,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 12,
   },
-  typeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  typeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
   datesRow: {
     flexDirection: 'row',
     marginBottom: 12,
@@ -311,19 +309,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 6,
-  },
-  datePickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 8,
-  },
-  datePickerBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   errorText: {
     color: '#DC2626',
@@ -344,17 +329,6 @@ const styles = StyleSheet.create({
   overlapCheckText: {
     color: '#16A34A',
     fontSize: 11,
-    fontWeight: '700',
-  },
-  submitBtn: {
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  submitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
     fontWeight: '700',
   },
   sectionHeading: {
