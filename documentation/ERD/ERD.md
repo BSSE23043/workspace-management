@@ -1,0 +1,218 @@
+# WMS Data Model — ERD
+
+```mermaid
+erDiagram
+    COMPANY {
+        string name "Company display name"
+        string enterpriseId "Enterprise registration id"
+        string mainCampus "Head office campus"
+        float latitude "Geofence center latitude"
+        float longitude "Geofence center longitude"
+        int geofenceRadiusMeters "Allowed punch radius"
+        string timezone "Company timezone"
+        json workingDays "Array of day codes"
+        int standardWorkingDaysPerMonth "Payroll working days"
+        int defaultAbsenceDeduction "Default deduction per absent day"
+        int defaultUnpaidLeaveDeduction "Legacy unpaid leave deduction"
+    }
+
+    USER {
+        string id PK "EMP or ADM or SUP plus number"
+        string companyId FK "Company scope key CO plus number"
+        string companyName "Set on Super Admin created admins"
+        string name "Full name"
+        string email UK "Globally unique login email"
+        string password "Plaintext password"
+        string role "ADMIN MANAGER HR EMPLOYEE CLIENT SUPER_ADMIN"
+        string managerId FK "Employee to manager self link"
+        string reportsTo "Manager display name"
+        string title "Job title"
+        string location "Work location"
+        string phone "Contact number"
+        string department "Only on hardcoded super admin"
+        string avatarKey "Image key or local uri"
+        boolean isActive "Account enabled flag"
+        datetime createdAt "Set when an admin is provisioned"
+    }
+
+    ATTENDANCE_LOG {
+        string id PK "ATT or ATT-OVR plus timestamp"
+        string userId FK "Punching user id"
+        string userName "Denormalized user name"
+        string department "Legacy demo field"
+        date logDate "One record per user per date"
+        string checkInTime "Display time"
+        string checkOutTime "Nullable display time"
+        float distanceMeters "Distance from geofence center"
+        string status "PRESENT ABSENT CORRECTED_PRESENT"
+        string statusCategory "Display status text"
+        string terminal "Punch terminal"
+        string bssid "Office wifi bssid"
+        boolean isGeofenceVerified "Inside radius flag"
+        string correctionNote "HR override note"
+    }
+
+    LEAVE_REQUEST {
+        string id PK "LV plus timestamp"
+        string userId FK "Requesting user id"
+        string userName "Denormalized user name"
+        string type "Leave category"
+        date startDate "First leave day"
+        date endDate "Last leave day"
+        int daysCount "Inclusive working days"
+        string reason "Employee explanation"
+        string status "PENDING APPROVED REJECTED"
+        string managerReviewComment "Reviewer note"
+        string teamOverlapStatus "Overlap check label"
+    }
+
+    TASK {
+        string id PK "TSK plus number"
+        string code "Display code"
+        string requirementId FK "Nullable parent requirement"
+        string title "Task title"
+        string description "Task details"
+        string assignedToId FK "Primary assignee user id"
+        string assignedToName "Primary assignee name"
+        json assignedToIds "All assignee user ids"
+        json assignedToNames "All assignee names"
+        string createdByName "Creator display name"
+        string priority "LOW MEDIUM HIGH"
+        date internalDeadline "Employee deadline"
+        date clientDeadline "Client deadline"
+        int bufferDays "Client minus internal deadline"
+        boolean hasConflict "Negative buffer flag"
+        string conflictDetails "Conflict description"
+        boolean isMilestoneSynced "Ready for client sync"
+        string status "TO_DO IN_PROGRESS DONE"
+        int progressPercent "Completion percentage"
+    }
+
+    TASK_LOG {
+        string taskId FK "Parent task id"
+        datetime createdAt "Real timestamp"
+        string time "Display label"
+        string author "Log author"
+        string note "Message text"
+    }
+
+    REQUIREMENT {
+        string id PK "REQ plus number"
+        string code "Display code"
+        string title "Requirement title"
+        string organization "Client organization"
+        string clientRepresentative "Client contact name"
+        string clientId FK "Nullable client user id"
+        string clientEmail "Client contact email"
+        date contractDeadline "Contract due date"
+        string lifecycleState "IN_PROGRESS COMPLETED"
+        int completedMilestones "Completed count"
+        int totalMilestones "Total count"
+        int progressPercent "Milestone completion percent"
+        json privateLinkedTasks "Linked task ids"
+    }
+
+    REQUIREMENT_MILESTONE {
+        string id PK "m plus timestamp"
+        string reqId FK "Parent requirement id"
+        string title "Milestone title"
+        boolean isCompleted "Done flag"
+    }
+
+    REQUIREMENT_BROADCAST {
+        string id PK "bc plus timestamp"
+        string reqId FK "Parent requirement id"
+        datetime createdAt "Real timestamp"
+        string time "Display label"
+        string author "Publisher name"
+        string content "Broadcast text"
+    }
+
+    CLARIFICATION_REPLY {
+        string id PK "cr plus timestamp"
+        string reqId FK "Parent requirement id"
+        datetime createdAt "Real timestamp"
+        string time "Display label"
+        string author "Reply author"
+        string content "Reply text"
+    }
+
+    HR_TICKET {
+        string id PK "TKT plus number"
+        string userId FK "Opening user id"
+        string userName "Denormalized user name"
+        string subject "Ticket subject"
+        string explanation "Ticket body"
+        date logDate "Target ticket date"
+        string status "OPEN IN_PROGRESS RESOLVED REJECTED"
+    }
+
+    TICKET_MESSAGE {
+        string ticketId FK "Parent ticket id"
+        string sender "Message sender"
+        datetime createdAt "Real timestamp"
+        string time "Display label"
+        string message "Discussion text"
+    }
+
+    SALARY_CONFIG {
+        int workingDaysPerPeriod "Company wide working days"
+        int deductionPerAbsentDay "Company wide absence rate"
+        int baseSalaryDefault "Company wide base salary"
+    }
+
+    SALARY_OVERRIDE {
+        string userId FK "Overridden employee id"
+        int baseSalary "Custom base salary"
+        int workingDaysPerPeriod "Custom working days"
+        int deductionPerAbsentDay "Custom absence rate"
+    }
+
+    AUTH_SESSION {
+        json userSnapshot "Full copy of the logged in USER"
+    }
+
+    THEME_PREFERENCE {
+        boolean isDark "Dark mode flag"
+    }
+
+    COMPANY ||--o{ USER : "scopes"
+    USER ||--o{ USER : "manages"
+    USER ||--o{ ATTENDANCE_LOG : "punches"
+    USER ||--o{ LEAVE_REQUEST : "submits"
+    USER ||--o{ HR_TICKET : "opens"
+    USER }o--o{ TASK : "is assigned"
+    REQUIREMENT ||--o{ TASK : "groups"
+    USER ||--o{ REQUIREMENT : "client commissions"
+    REQUIREMENT ||--o{ REQUIREMENT_MILESTONE : "has"
+    REQUIREMENT ||--o{ REQUIREMENT_BROADCAST : "publishes"
+    REQUIREMENT ||--o{ CLARIFICATION_REPLY : "receives"
+    TASK ||--o{ TASK_LOG : "has"
+    HR_TICKET ||--o{ TICKET_MESSAGE : "has"
+    SALARY_CONFIG ||--o{ SALARY_OVERRIDE : "defaults"
+    USER ||--o| SALARY_OVERRIDE : "has custom pay"
+    USER ||--o| AUTH_SESSION : "active session"
+```
+
+## Notes
+
+- `COMPANY` is a single AsyncStorage document with no `id`; every `USER` carries a `companyId` scope key, and an Admin's `companyName` is the only direct company label on the user record.
+- `SUPER_ADMIN` is hardcoded in `utils/superAdminConfig.js` and is never written to `@wms_users`; it only appears in `AUTH_SESSION`.
+- `TASK_LOG`, `REQUIREMENT_MILESTONE`, `REQUIREMENT_BROADCAST`, `CLARIFICATION_REPLY`, `TICKET_MESSAGE` and `SALARY_OVERRIDE` are embedded JSON inside their parent document, not separate storage keys.
+- `ATTENDANCE_LOG` is unique per `userId` + `logDate`; `TASK.requirementId`, `REQUIREMENT.clientId`, `USER.managerId` and `USER.companyId` are nullable links.
+- `REQUIREMENT_BROADCAST` and `CLARIFICATION_REPLY` are currently only written to the requirement document; they are separate diagram entities because they are separate arrays.
+
+## AsyncStorage mapping
+
+| Key | Entities |
+| --- | --- |
+| `@wms_company` | `COMPANY` |
+| `@wms_users` | `USER` |
+| `@wms_attendance` | `ATTENDANCE_LOG` |
+| `@wms_leaves` | `LEAVE_REQUEST` |
+| `@wms_tasks` | `TASK` + `TASK_LOG` |
+| `@wms_requirements` | `REQUIREMENT` + `REQUIREMENT_MILESTONE` + `REQUIREMENT_BROADCAST` + `CLARIFICATION_REPLY` |
+| `@wms_tickets` | `HR_TICKET` + `TICKET_MESSAGE` |
+| `@wms_salary_config` | `SALARY_CONFIG` + `SALARY_OVERRIDE` |
+| `@wms_auth_current_user` | `AUTH_SESSION` |
+| `@wms_theme_preference` | `THEME_PREFERENCE` |
