@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import { fetchMyTasks } from '../../services/taskApi';
+import { loadTasks } from '../../services/taskApi';
 import { loadLeaves } from '../../services/leaveService';
 import { fetchMyAttendance } from '../../services/attendanceApi';
 import { fetchSalaryConfigApi } from '../../services/salaryApi';
@@ -25,6 +26,8 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
 
   // Tasks, attendance, leaves & the salary policy are NOT in Redux anymore —
   // hydrate them on mount and refresh on focus so the cards stay current.
+  // Tasks now come from MySQL through the backend API; leaves, punch logs and
+  // the salary policy still come from AsyncStorage. Refresh everything on focus.
   const [tasks, setTasks] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [logs, setLogs] = useState([]);
@@ -33,6 +36,13 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   useEffect(() => {
     const load = async () => {
       setTasks(await fetchMyTasks(currentUser?.email || ''));
+      try {
+        setTasks(await loadTasks());
+      } catch (err) {
+        console.warn('[EmployeeDashboard] Task database unavailable:', err.message);
+        setTasks([]);
+      }
+
       setLeaves(await loadLeaves());
       setLogs(await fetchMyAttendance(currentUser?.email || ''));
       setSalaryConfig(await fetchSalaryConfigApi(currentUser?.email || ''));
