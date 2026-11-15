@@ -3,6 +3,8 @@ const cors = require('cors');
 require('dotenv').config();
 
 const { testConnection } = require('./src/config/db');
+const authRoutes = require('./src/routes/authRoutes');
+const superAdminRoutes = require('./src/routes/superAdminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,6 +25,10 @@ app.get('/api/health', async (req, res) => {
     });
   }
 });
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/super-admin', superAdminRoutes);
 
 app.listen(PORT, () => {
   console.log(`[WMS Backend] Server running on http://localhost:${PORT}`);
