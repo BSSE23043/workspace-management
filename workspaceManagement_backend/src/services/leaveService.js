@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const pool = require('../config/db');
+const { pool } = require('../config/db');
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 

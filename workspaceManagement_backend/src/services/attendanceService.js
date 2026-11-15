@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const pool = require('../config/db');
+const { pool } = require('../config/db');
 
 const EARTH_RADIUS_METERS = 6371000;
 

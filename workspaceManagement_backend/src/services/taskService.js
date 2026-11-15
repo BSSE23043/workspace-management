@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const pool = require('../config/db');
+const { pool } = require('../config/db');
 
 const toApiTask = async (taskRow) => {
   const [assignees] = await pool.execute(

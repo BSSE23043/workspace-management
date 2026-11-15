@@ -1,7 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 
-const pool = require('./config/db');
+const { pool } = require('./config/db');
+const authRoutes = require('./routes/authRoutes');
+const superAdminRoutes = require('./routes/superAdminRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 const leaveRoutes = require('./routes/leaveRoutes');
 const requirementRoutes = require('./routes/requirementRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
@@ -12,7 +15,7 @@ const salaryRoutes = require('./routes/salaryRoutes');
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 app.get('/api/health', async (req, res) => {
   try {
@@ -23,6 +26,9 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+app.use('/api/auth', authRoutes);
+app.use('/api/super-admin', superAdminRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/requirements', requirementRoutes);
 app.use('/api/tickets', ticketRoutes);

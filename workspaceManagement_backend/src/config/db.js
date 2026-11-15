@@ -13,9 +13,6 @@ const pool = mysql.createPool({
   dateStrings: true,
 });
 
-module.exports = pool;
-});
-
 const testConnection = async () => {
   const connection = await pool.getConnection();
   try {
