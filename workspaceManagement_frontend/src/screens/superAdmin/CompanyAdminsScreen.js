@@ -6,9 +6,9 @@
 //      Password) — e.g. when a new company subscribes to WMS.
 //   2. REMOVE an existing Company Admin account.
 //
-// Company Admin accounts are stored in AsyncStorage under STORAGE_KEYS.USERS
-// with role = 'ADMIN' (the user database has no demo users anymore). That way
-// the normal Login flow picks them up automatically (no extra login code needed).
+// Company Admin accounts are stored in MySQL (a companies row plus a users row
+// with role = 'ADMIN') through services/api.js. The normal Login flow reads them
+// from the backend, so no extra login code is needed.
 // ============================================================================
 import React, { useState, useEffect, useRef } from 'react';
 import {

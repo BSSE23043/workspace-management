@@ -3,9 +3,9 @@
 // ----------------------------------------------------------------------------
 // Landing screen of the Super Admin portal. Shows a platform overview and
 // simple statistics (number of Company Admin accounts, number of registered
-// companies). Company Admin accounts are stored in AsyncStorage together with
-// all other users (STORAGE_KEYS.USERS) and can be managed on the
-// "Company Admins" tab next to this screen.
+// companies) fetched from the backend. Company Admin accounts live in MySQL
+// (users + companies) and can be managed on the "Company Admins" tab next to
+// this screen.
 // ============================================================================
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';

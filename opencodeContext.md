@@ -454,6 +454,11 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
     verified: `node --check` on every backend JS file; live 200s for `/api/health`,
     `/api/attendance/status`, `/api/leaves`, `/api/auth/login`, `/api/super-admin/stats`,
     `/api/admin/users/CO-001`; Babel parse OK on all 9 frontend files changed by the merge.
+  - End-to-end MySQL smoke test passed (50/50 checks): Super Admin login + create/delete Company
+    Admin (`companies` + `ADMIN` rows written), Company Admin login/profile save/provision
+    EMPLOYEE-MANAGER-HR-CLIENT/deactivate-reactivate/update, all four new logins, employee profile +
+    leave + ticket writes and task/salary/attendance reads, and client requirement reads. Temp
+    company/users/rows were removed afterwards; the pre-existing `CO-938 Softec` admin was left intact.
 - **2026-11-15** — **MySQL Backend Integration for Auth, Super Admin, and Company Admin + Admin Portal Fixes.**
   - **Backend (`workspaceManagement_backend/`):**
     - Configured Express server (`server.js`), `.env`, and `mysql2/promise` connection pool (`src/config/db.js`) targeting `wms_schema.sql` (`companies` and `users` tables).
