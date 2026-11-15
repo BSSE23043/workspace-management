@@ -12,9 +12,9 @@ import HeaderBar from '../../components/common/HeaderBar';
 import AppButton from '../../components/common/AppButton';
 import TextButton from '../../components/common/TextButton';
 import Icon from '../../components/common/Icon';
-import { loadLeaves } from '../../services/leaveService';
-import { loadAttendance } from '../../services/attendanceService';
-import { loadSalaryConfig } from '../../services/salaryService';
+import { fetchMyLeaves } from '../../services/leaveApi';
+import { fetchMyAttendance } from '../../services/attendanceApi';
+import { fetchSalaryConfigApi } from '../../services/salaryApi';
 import { calculateSalaryEstimate, formatCurrency } from '../../utils/salaryCalculator';
 import { elapsedWorkdaysInMonth, getUnexcusedAbsentDays, attendanceTrackingStart } from '../../utils/attendanceStats';
 
@@ -33,9 +33,9 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const load = async () => {
-      setLeaves(await loadLeaves());
-      setLogs(await loadAttendance());
-      setSalaryConfig(await loadSalaryConfig());
+      setLeaves(await fetchMyLeaves(currentUser?.email || ''));
+      setLogs(await fetchMyAttendance(currentUser?.email || ''));
+      setSalaryConfig(await fetchSalaryConfigApi(currentUser?.email || ''));
       setIsDataLoaded(true);
     };
     load();
@@ -49,7 +49,7 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
 
   // Real days present this month
   const myMonthLogs = logs.filter(
-    (l) => l.userId === currentUser?.id && (l.date || '').startsWith(monthPrefix)
+    (l) => l.userId === currentUser?.email && (l.date || '').startsWith(monthPrefix)
   );
   const presentDays = myMonthLogs.filter(
     (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
@@ -59,7 +59,7 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
   // (there is no unpaid-leave category since the Manal3 payroll update)
   const myMonthLeaves = leaves.filter(
     (l) =>
-      l.userId === currentUser?.id &&
+      l.userEmail === currentUser?.email &&
       l.status === 'APPROVED' &&
       (l.startDate || '').startsWith(monthPrefix)
   );
@@ -79,7 +79,7 @@ export const MySalaryEstimateScreen = ({ navigation }) => {
   });
 
   // Company policy, or this employee's override if HR configured one
-  const cfg = salaryConfig.overrides[currentUser?.id] || salaryConfig.companyWide;
+  const cfg = salaryConfig.overrides[currentUser?.email] || salaryConfig.companyWide;
 
   const estimate = calculateSalaryEstimate({
     baseSalary: currentUser?.baseSalary || cfg.baseSalary || cfg.baseSalaryDefault || 0,

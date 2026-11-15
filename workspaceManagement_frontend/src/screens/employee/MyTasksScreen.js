@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import { loadTasks, updateTaskStatus, addTaskLog } from '../../services/taskService';
+import { fetchMyTasks, updateTaskStatusApi, addTaskLogApi } from '../../services/taskApi';
 import { timeAgo } from '../../utils/timeAgo';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppButton from '../../components/common/AppButton';
@@ -38,24 +38,29 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
   // another screen) shows the latest data next time the employee looks.
   const [tasks, setTasks] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const load = async () => {
+    if (!currentUser?.email) { setIsDataLoaded(true); return; }
+    try {
+      const data = await fetchMyTasks(currentUser.email);
+      setTasks(data);
+    } catch (e) {
+      setTasks([]);
+    }
+    setIsDataLoaded(true);
+  };
   useEffect(() => {
-    const load = async () => {
-      setTasks(await loadTasks());
-      setIsDataLoaded(true);
-    };
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
-  }, [navigation]);
+  }, [navigation, currentUser?.email]);
 
   const [selectedTab, setSelectedTab] = useState('ALL');
 
   // Filter tasks to this employee (supports both assignedToId and multi-assignees assignedToIds)
-  const currentUserId = currentUser?.id || '';
   const myTasks = tasks.filter(
     (t) =>
-      t.assignedToId === currentUserId ||
-      (Array.isArray(t.assignedToIds) && t.assignedToIds.includes(currentUserId))
+      t.assignedToEmails?.includes(currentUser?.email) ||
+      t.assignedToIds?.includes(currentUser?.email)
   );
 
   const [selectedTaskId, setSelectedTaskId] = useState(myTasks[0]?.id || '');
@@ -104,14 +109,14 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
 
     // Writes the new status/progress to AsyncStorage and refreshes local state
     // with the saved list (taskService hands it straight back).
-    const nextTasks = await updateTaskStatus({
+    const updated = await updateTaskStatusApi({
       taskId: task.id,
       status: taskState,
       progressPercent: validPct,
       note: progressNote.trim() || `Progress recorded at ${validPct}%`,
-      author: currentUser?.name,
+      authorEmail: currentUser?.email,
     });
-    setTasks(nextTasks);
+    if (updated) setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
 
     Alert.alert(
       'Progress Saved',
@@ -123,12 +128,12 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
   // manager sees it on his "Chronological Progress Log" screen.
   const handleSendMessage = async () => {
     if (!messageText.trim() || !activeTask) return;
-    const nextTasks = await addTaskLog({
+    const updated = await addTaskLogApi({
       taskId: activeTask.id,
       note: messageText.trim(),
-      author: currentUser?.name,
+      authorEmail: currentUser?.email,
     });
-    setTasks(nextTasks);
+    if (updated) setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
     setMessageText('');
   };
 

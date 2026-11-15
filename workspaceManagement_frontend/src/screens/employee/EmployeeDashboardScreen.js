@@ -7,10 +7,10 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import { loadTasks } from '../../services/taskService';
+import { fetchMyTasks } from '../../services/taskApi';
 import { loadLeaves } from '../../services/leaveService';
-import { loadAttendance } from '../../services/attendanceService';
-import { loadSalaryConfig } from '../../services/salaryService';
+import { fetchMyAttendance } from '../../services/attendanceApi';
+import { fetchSalaryConfigApi } from '../../services/salaryApi';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppButton from '../../components/common/AppButton';
 import CardButton from '../../components/common/CardButton';
@@ -23,9 +23,8 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  // Tasks, leaves, punch logs & the salary policy are NOT in Redux anymore —
-  // read them from AsyncStorage on mount and refresh on focus so the cards
-  // always show the latest state.
+  // Tasks, attendance, leaves & the salary policy are NOT in Redux anymore —
+  // hydrate them on mount and refresh on focus so the cards stay current.
   const [tasks, setTasks] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [logs, setLogs] = useState([]);
@@ -33,10 +32,10 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const load = async () => {
-      setTasks(await loadTasks());
+      setTasks(await fetchMyTasks(currentUser?.email || ''));
       setLeaves(await loadLeaves());
-      setLogs(await loadAttendance());
-      setSalaryConfig(await loadSalaryConfig());
+      setLogs(await fetchMyAttendance(currentUser?.email || ''));
+      setSalaryConfig(await fetchSalaryConfigApi(currentUser?.email || ''));
       setIsDataLoaded(true);
     };
     load();
@@ -44,15 +43,14 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     return () => unsubscribe();
   }, [navigation]);
 
-  const activeTask = tasks.find((t) => t.assignedToId === currentUser?.id || t.id === 'TSK-408') || tasks[0];
-  const todayLog = logs.find((l) => l.userId === currentUser?.id || l.userId === 'EMP-089');
+  const activeTask = tasks[0];
   const monthPrefix = new Date().toISOString().slice(0, 7);
   const monthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-
-  const recentLogs = logs.filter((l) => l.userId === currentUser?.id).slice(0, 2);
-
+ 
+  const recentLogs = logs.filter((l) => l.userId === currentUser?.email).slice(0, 2);
+ 
   const myMonthLogs = logs.filter(
-    (l) => l.userId === currentUser?.id && (l.date || '').startsWith(monthPrefix)
+    (l) => l.userId === currentUser?.email && (l.date || '').startsWith(monthPrefix)
   );
   const presentDays = myMonthLogs.filter(
     (l) => l.status === 'PRESENT' || l.status === 'CORRECTED_PRESENT'
@@ -78,7 +76,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     presentDays,
     paidLeaveDays,
   });
-  const cfg = salaryConfig.overrides[currentUser?.id] || salaryConfig.companyWide;
+  const cfg = salaryConfig.overrides[currentUser?.email] || salaryConfig.companyWide;
   const myEstimate = calculateSalaryEstimate({
     baseSalary: currentUser?.baseSalary || cfg.baseSalary || cfg.baseSalaryDefault || 0,
     workingDaysPerPeriod: cfg.workingDaysPerPeriod,

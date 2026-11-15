@@ -4,6 +4,10 @@ const cors = require('cors');
 const pool = require('./config/db');
 const leaveRoutes = require('./routes/leaveRoutes');
 const requirementRoutes = require('./routes/requirementRoutes');
+const ticketRoutes = require('./routes/ticketRoutes');
+const taskRoutes = require('./routes/taskRoutes');
+const attendanceRoutes = require('./routes/attendanceRoutes');
+const salaryRoutes = require('./routes/salaryRoutes');
 
 const app = express();
 
@@ -21,6 +25,10 @@ app.get('/api/health', async (req, res) => {
 
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/requirements', requirementRoutes);
+app.use('/api/tickets', ticketRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/salary', salaryRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: `Route ${req.method} ${req.originalUrl} not found` });

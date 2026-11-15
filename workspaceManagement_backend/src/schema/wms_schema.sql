@@ -25,8 +25,8 @@ CREATE TABLE companies (
 
 CREATE TABLE `schedule` (
     company_id VARCHAR(20) NOT NULL,
-    starting_time DATE NOT NULL,
-    ending_time DATE NOT NULL,
+    starting_time TIME NOT NULL,
+    ending_time TIME NOT NULL,
     PRIMARY KEY (company_id),
     CONSTRAINT fk_schedule_company
         FOREIGN KEY (company_id) REFERENCES companies (company_id)
@@ -109,6 +109,7 @@ CREATE TABLE attendance_logs (
     user_email VARCHAR(190) NOT NULL,
     attendance_date DATETIME NOT NULL,
     is_checkin TINYINT(1) NOT NULL COMMENT '1 = check-in, 0 = check-out',
+    distance_meters DECIMAL(8,1) NULL COMMENT 'Radial distance from company geofence at punch (m)',
     PRIMARY KEY (id),
     INDEX idx_attendance_user_date (user_email, attendance_date),
     CONSTRAINT fk_attendance_logs_user
@@ -122,7 +123,8 @@ CREATE TABLE hr_tickets (
     user_email VARCHAR(190) NOT NULL COMMENT 'Raised by',
     subject VARCHAR(200) NOT NULL,
     description TEXT NULL,
-    status ENUM('OPEN', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'OPEN',
+    event_date DATE NULL COMMENT 'Date of the event being reported',
+    status ENUM('OPEN', 'APPROVED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED') NOT NULL DEFAULT 'OPEN',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     INDEX idx_hr_tickets_user (user_email),
