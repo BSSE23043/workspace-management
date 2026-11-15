@@ -20,7 +20,10 @@
 - **Nature:** A semester Mobile-App-Dev course project deliberately built to showcase the full
   React Native syllabus (class components, all list types, all hooks, Context + Redux, AsyncStorage,
   drawer/tabs/stack navigation). Code contains "Syllabus Requirement:" comments.
-- **Backend:** **NONE.** The app is fully offline/seed-driven. Most domain data lives in Redux
+- **Backend:** A Node.js/Express + MySQL backend now lives in `workspaceManagement_backend/`
+  (started 2026-11-15); only the **employee Request Leave** flow uses it so far (single leave
+  type — the annual/sick split was removed), everything else below remains offline/seed-driven.
+  Most domain data lives in Redux
   (in-memory, seeded from `src/data/seedData.js`); the auth session is mirrored to AsyncStorage.
   **Users are NOT in Redux at all** — AsyncStorage `@wms_users` is the single source of truth and
   every screen loads the user list from it with local `useState`/`useEffect`. **Tasks and
@@ -28,8 +31,8 @@
   source of truth, read on demand by `services/taskService.js` / `services/requirementService.js`
   (screens load them on mount + focus into local state; mutations read→change→write). The
   user database is not seeded — it starts empty; accounts only exist via the Super Admin flow.
-  No HTTP/network calls anywhere (the `fetch` demos were removed with the
-  announcements feature — `fetch` is not in the syllabus concepts list).
+  The only network calls are the employee Request Leave calls (see the Backend section);
+  the old `fetch` demos were removed with the announcements feature.
 - **Blueprint:** `repo/workforce_management_system_developer_blueprint.md` (repo root) is the
   authoritative spec: role permission matrix, syllabus compliance matrix, formulas, and 6 phased
   build prompts. Consult it before large changes.
@@ -41,8 +44,12 @@ repo/                                  (git root; branches: main, Samer, Umar[cu
 ├── README.md
 ├── documentation/
 │   ├── bug report.txt
-│   └── steps required to setup this project.txt
+│   ├── steps required to setup this project.txt
+│   └── agents/concurrent-task-report.md   ← multi-agent task/status board
 ├── workforce_management_system_developer_blueprint.md   ← full spec / source of truth
+├── workspaceManagement_backend/       ← Node.js/Express + MySQL API
+│   ├── server.js                     (entry: loads .env, starts app on :5000)
+│   └── src/{app.js, config/, routes/, controllers/, services/, utils/, schema/}
 └── workspaceManagement_frontend/      ← React Native app (working dir)
     ├── android/                       (no ios/ folder; Android only)
     ├── src/
@@ -61,11 +68,16 @@ repo/                                  (git root; branches: main, Samer, Umar[cu
 | Navigation | `@react-navigation/native` 7.x + native-stack, bottom-tabs, drawer | + screens, safe-area-context, gesture-handler, reanimated, worklets |
 | State | `@reduxjs/toolkit` 2.x + `react-redux` 9.x | **All reducers synchronous**; `serializableCheck: false`; no thunks |
 | Session/theme | React Context (session) + Redux (theme) | `AuthContext`; dark/light flag lives in `themeSlice` |
-| Storage | `@react-native-async-storage/async-storage` 3.x | Keys namespaced `@wms_*` |
-| HTTP | — | No HTTP calls anywhere; `fetch` demos removed (not in syllabus concepts) |
+| Storage | `@react-native-async-storage/async-storage` 3.x | Keys namespaced `@wms_*` (auth/users + all non-leave domains) |
+| HTTP | `fetch` (new 2026-11-15) | Employee Request Leave calls the backend via `services/apiClient.js` |
 | Icons | Custom unicode `Icon` component | `@expo/vector-icons` is installed but **never used** |
 | Testing | Jest (`@react-native/jest-preset`) | **No tests exist in src/** |
 | Scripts | `npm run android`, `npm start`, `npm test` | No `ios` script |
+
+**Backend stack (new 2026-11-15):** Node.js + Express 5, `mysql2/promise` pool, `cors`,
+`dotenv`, `nodemon` (dev). MySQL 8.4.7 via WAMP, database `workspace_management`
+(schema `workspaceManagement_backend/src/schema/wms_schema.sql`, demo rows in `demo_seed.sql`).
+API base for the Android emulator: `http://10.0.2.2:5000/api`.
 
 ## 4. Architecture
 
@@ -226,8 +238,9 @@ shows the requirement's client-reply count so a reply is spotted even when anoth
 **employee/** — `EmployeeDashboardScreen` (attendance card w/ geofence distance, salary estimate),
 `AttendanceActionScreen` (**useReducer** GPS simulator, haversine INSIDE/OUTSIDE 200 m, blocks punch
 outside), `MySalaryEstimateScreen` (transparent payslip, month cycles), `WorkAndRequestsHubScreen`
-(segment switcher embedding the 3 screens below via `isEmbedded`), `MyLeaveRequestsScreen` (leave
-types, date range, overlap validation), `MyHRTicketsScreen` (3 categories, correction details sub-card),
+  (segment switcher embedding the 3 screens below via `isEmbedded`), `MyLeaveRequestsScreen` (single
+  leave type, date range, overlap validation; loads/submits via the backend API), `MyHRTicketsScreen`
+  (3 categories, correction details sub-card),
 `MyTasksScreen` (status tabs, quick % progress), `EmployeeProfileScreen`.
 
 **client/** — both requirement screens are **scoped to the logged-in client**: they filter on
@@ -286,6 +299,10 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
   Each holds the list in local `useState`, loads on mount **and on
   `navigation.addListener('focus')`** (tab screens stay mounted), and gates the first render
   with an `isDataLoaded` flag so empty states don't flash.
+- **Employee leave API (new 2026-11-15)** — `services/apiClient.js` (fetch wrapper +
+  `API_BASE_URL`) and `services/leaveApi.js` (`fetchMyLeaves`, `submitLeaveRequest`).
+  `MyLeaveRequestsScreen` uses these; the old `leaveService.js` (AsyncStorage `@wms_leaves`)
+  now serves only the manager's `TeamLeaveRequestsScreen` (and its approve/reject helpers).
 - ~~`networkService.js`~~ **deleted** (only existed for the announcements feature's `fetch` demo).
 
 ## 9. Seed Data Highlights (`src/data/seedData.js`)
@@ -314,9 +331,12 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
 
 ## 10. Known Caveats / Tech Debt
 
-- No backend; the Redux theme flag resets on app reload (restored from `@wms_theme_preference` at boot; the
-  auth session, users, company profile, tasks/requirements/tickets/leaves/attendance/salary all persist in
-  AsyncStorage and survive reloads).
+- Backend exists only for employee Request Leave (2026-11-15); everything else is still offline.
+  The API has no auth yet — it trusts the `userEmail` sent by the client. Login/provisioning remain
+  AsyncStorage-only, so a mobile account's email must match a row in the backend `users` table
+  (e.g. demo `employee2@grt.com`) to submit leave. The Redux theme flag resets on app reload
+  (restored from `@wms_theme_preference` at boot; the auth session, users, company profile,
+  tasks/requirements/tickets/leaves/attendance/salary all persist in AsyncStorage and survive reloads).
 - Plaintext passwords in AsyncStorage; Super Admin credentials hardcoded in `superAdminConfig.js` (fine for a course project).
 - Removing a Company Admin only removes them from AsyncStorage USERS (an already-open session of theirs would persist until logout).
 - All image assets are 1x1-px placeholder stubs (blueprint lists required real images).
@@ -336,8 +356,55 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
 
 ---
 
+## 12. Backend (`workspaceManagement_backend`)
+
+- **Stack:** Node.js + Express 5, `mysql2/promise` connection pool, `cors`, `dotenv`,
+  `nodemon` (dev). Entry `server.js` → `src/app.js`; config in `.env` (gitignored, see
+  `.env.example`). Listens on **:5000**.
+- **Database:** MySQL 8.4.7 (WAMP), database `workspace_management`. Schema:
+  `src/schema/wms_schema.sql` (14 tables). Demo data: `src/schema/demo_seed.sql`
+  (company `CO-001` "Global Research Trends" + users `admin@grt.com`, `manager@grt.com`,
+  `hr@grt.com`, `employee2@grt.com`, `client@grt.com`, all password `123456`).
+- **Employee API (Request Leave):**
+  - `GET /api/leaves?userEmail=...` → `{ data: [ { id, userEmail, startDate, endDate,
+    reason, status, daysCount } ] }` (newest first).
+  - `POST /api/leaves` body `{ userEmail, startDate, endDate, reason }` → 201 created
+    leave (`status: PENDING`). Validates dates, requires a reason, 404 for an unknown user,
+    409 for an overlapping non-rejected leave.
+  - `GET /api/health` → DB connectivity check.
+  - Layering: `routes/leaveRoutes.js` → `controllers/leaveController.js` →
+    `services/leaveService.js` → `config/db.js`; `utils/asyncHandler.js` +
+    `utils/httpError.js` propagate errors.
+- **Single leave type:** the annual/sick split was removed from the employee UI; a request
+  carries no `type`. History renders a generic "Leave Request" label.
+- **Not yet built:** auth/JWT (the API takes `userEmail` from the client), manager
+  approve/reject endpoints, and any other employee domains. The manager
+  `TeamLeaveRequestsScreen` still reads AsyncStorage `@wms_leaves`.
+
+---
+
 ## Changelog (append every change/pull/merge on `Umar`)
 
+- **2026-11-15** — **Employee backend started: MySQL database + Request Leave migrated off AsyncStorage (single leave type).**
+  - **Database:** created `workspace_management` by running `workspaceManagement_backend/src/schema/wms_schema.sql`
+    once (14 tables). Added `src/schema/demo_seed.sql` (idempotent) seeding company `CO-001` "Global Research Trends"
+    and users `admin@grt.com`, `manager@grt.com`, `hr@grt.com`, `employee2@grt.com`, `client@grt.com`
+    (all password `123456`) so the `users`/`companies` FKs are satisfiable before Admin provisioning moves to the backend.
+  - **Backend scaffold:** `workspaceManagement_backend` now has `server.js` (dotenv + DB check + listen on :5000),
+    `src/app.js` (cors/json/health/404/error middleware), `src/config/db.js` (mysql2 pool, `dateStrings: true`),
+    `src/utils/asyncHandler.js`, `src/utils/httpError.js`, and a layered leaves module
+    (`routes/leaveRoutes.js` → `controllers/leaveController.js` → `services/leaveService.js`).
+  - **API:** `GET /api/leaves?userEmail=...` (own requests, newest first, computed `daysCount`),
+    `POST /api/leaves` (creates `PENDING`; validates date format/order + reason; 404 unknown user;
+    409 overlapping non-rejected leave), `GET /api/health`. Added `mysql2`, `.env`/`.env.example`, and
+    `start`/`dev` npm scripts. Verified end-to-end with PowerShell HTTP calls.
+  - **Frontend:** new `src/services/apiClient.js` (fetch wrapper, `API_BASE_URL = http://10.0.2.2:5000/api`)
+    and `src/services/leaveApi.js` (`fetchMyLeaves`, `submitLeaveRequest`). `MyLeaveRequestsScreen` now
+    loads/submits through the API (mount + focus reload, loading/error states, submit spinner), removed the
+    Annual/Sick leave-type chips and the `type` field, defaults dates to today/tomorrow and the reason to empty,
+    and shows a generic "Leave Request" label in history. Manager `TeamLeaveRequestsScreen` and
+    `leaveService.js` left on AsyncStorage (manager backend not built).
+  - Babel-parse OK on the 3 frontend files; `node --check` OK on all 8 backend JS files.
 - **2026-10-23** — **Removed the `HeaderBar` status-pill feature and other dead code.**
   - `components/common/HeaderBar.js`: deleted the `React.createElement` status pill plus the
     `statusText` / `statusColor` / `showStatus` props and the `statusPill` / `statusDot` / `statusText`

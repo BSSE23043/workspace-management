@@ -9,10 +9,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import {
-  loadRequirements,
-  addClientClarificationReply,
-} from '../../services/requirementService';
+import { fetchClientRequirements, submitClarificationReply } from '../../services/requirementApi';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import CardButton from '../../components/common/CardButton';
@@ -30,22 +27,27 @@ export const MyRequirementsScreen = ({ navigation }) => {
   // mount and refresh on focus, so manager updates show up without a restart.
   const [requirements, setRequirements] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const load = async () => {
+    if (!currentUser?.email) { setIsDataLoaded(true); return; }
+    try {
+      const data = await fetchClientRequirements(currentUser.email);
+      setRequirements(data);
+    } catch (e) {
+      setRequirements([]);
+    }
+    setIsDataLoaded(true);
+  };
   useEffect(() => {
-    const load = async () => {
-      setRequirements(await loadRequirements());
-      setIsDataLoaded(true);
-    };
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
-  }, [navigation]);
+  }, [navigation, currentUser?.email]);
 
   const [selectedTab, setSelectedTab] = useState('All');
   const scrollViewRef = useRef(null);
 
-  // A requirement is created against one specific client (clientId), so this
-  // client only sees the requirements that belong to its own account.
-  const clientRequirements = requirements.filter((r) => r.clientId === currentUser?.id);
+  // Backend already returns only this client's requirements.
+  const clientRequirements = requirements;
 
   // Which requirement is expanded in the big details card. Tapping a card in
   // "Other Requirements & Modules" sets this id; before any tap (or if the
@@ -71,14 +73,17 @@ export const MyRequirementsScreen = ({ navigation }) => {
 
   const handleSendClarification = async () => {
     if (!clarificationReply.trim() || !featuredReq) return;
-    // Saves the reply to AsyncStorage and refreshes local state with the
-    // saved list (requirementService hands it straight back).
-    const nextReqs = await addClientClarificationReply({
-      reqId: featuredReq.id,
-      author: currentUser?.name || 'Client',
-      content: clarificationReply.trim(),
-    });
-    setRequirements(nextReqs);
+    // Saves the reply to the backend database and refreshes local state.
+    try {
+      const updated = await submitClarificationReply({
+        reqId: featuredReq.id,
+        authorEmail: currentUser?.email,
+        message: clarificationReply.trim(),
+      });
+      if (updated) setRequirements((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    } catch (e) {
+      // ignore
+    }
     setClarificationReply('');
     Alert.alert('Clarification Sent', 'Your reply has been dispatched to the engineering manager.');
   };
