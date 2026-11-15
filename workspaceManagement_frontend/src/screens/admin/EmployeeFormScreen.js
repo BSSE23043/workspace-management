@@ -24,7 +24,6 @@ const SYSTEM_ROLES = [
   { id: 'EMPLOYEE', label: 'Employee', desc: 'Can submit leave, punch attendance, view salary & work tasks' },
   { id: 'MANAGER', label: 'Manager', desc: 'Handles client requirements and task management' },
   { id: 'HR', label: 'HR Specialist', desc: 'Configures deduction rates, handles tickets & attendance overrides' },
-  { id: 'ADMIN', label: 'Company Administrator', desc: 'Full account provisioning, policy setup & system drawer' },
   { id: 'CLIENT', label: 'Client Representative', desc: 'Tracks requirement milestones & sends broadcast clarifications' },
 ];
 

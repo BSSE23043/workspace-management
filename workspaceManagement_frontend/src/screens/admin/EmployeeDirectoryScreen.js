@@ -46,10 +46,11 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
   const loadUsers = useCallback(async () => {
     const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
     // Company admins created by the Super Admin carry a companyId; they only
-    // see users of their own company. Everyone else sees the full list.
-    const scopedUsers = currentUser?.companyId
+    // see non-admin users of their own company.
+    const scopedUsers = (currentUser?.companyId
       ? storedUsers.filter((u) => u.companyId === currentUser.companyId)
-      : storedUsers;
+      : storedUsers
+    ).filter((u) => u.role !== 'ADMIN');
     setUsers(scopedUsers);
   }, [currentUser]);
 
