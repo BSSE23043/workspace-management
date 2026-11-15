@@ -87,9 +87,9 @@ workspaceManagement_frontend/src/config/api.js
 | PATCH | `/api/tasks/:id/milestone-sync` | Mark/unmark client milestone sync |
 | POST | `/api/tasks/:id/logs` | Add a progress-log / timeline message |
 
-## 4. What `taskService.js` does (read AND write)
+## 4. What `taskApi.js` does (read AND write)
 
-`workspaceManagement_frontend/src/services/taskService.js` is the app's API
+`workspaceManagement_frontend/src/services/taskApi.js` is the app's API
 client for tasks. It is **not read-only**:
 
 | App function | HTTP call | What it does |
@@ -119,7 +119,7 @@ data is **never** read from or written to `@wms_tasks` anymore.
 
 Task assignees are stored in `task_assignments` by email because `users` uses
 email as its primary key. The app keeps its account list in AsyncStorage, so
-`taskService` mirrors those accounts through `POST /api/users/sync` before task
+`taskApi` mirrors those accounts through `POST /api/users/sync` before task
 reads/writes. Existing AsyncStorage tasks are **not** migrated automatically.
 
 ### Upgrading a database created from the older schema

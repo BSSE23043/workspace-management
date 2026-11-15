@@ -8,7 +8,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
-import { loadTasks } from '../../services/taskService';
+import { loadTasks } from '../../services/taskApi';
 import { loadRequirements } from '../../services/requirementService';
 import { loadAttendance } from '../../services/attendanceService';
 import HeaderBar from '../../components/common/HeaderBar';

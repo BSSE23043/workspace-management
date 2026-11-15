@@ -16,7 +16,7 @@ import {
   addTaskLog,
   editTask,
   toggleMilestoneSync,
-} from '../../services/taskService';
+} from '../../services/taskApi';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';

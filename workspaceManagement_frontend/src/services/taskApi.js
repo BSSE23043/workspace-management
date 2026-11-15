@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// TASK SERVICE — the ONLY place the app talks to the task database.
+// TASK API — the ONLY place the app talks to the task backend.
 //
 // This file is NOT read-only. It is the API client for the task backend, so it
 // both READS tasks from MySQL and WRITES changes back to MySQL.

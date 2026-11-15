@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import storageService, { STORAGE_KEYS } from '../../services/storageService';
-import { loadTasks, createTask } from '../../services/taskService';
+import { loadTasks, createTask } from '../../services/taskApi';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
@@ -124,7 +124,7 @@ export const TaskManagementScreen = ({ navigation }) => {
 
     try {
       // Writes the new task to MySQL through the backend API and refreshes the
-      // board with the saved list (taskService returns the fresh list).
+      // board with the saved list (taskApi returns the fresh list).
       const nextTasks = await createTask({
         title: taskTitle.trim(),
         assignedToIds,

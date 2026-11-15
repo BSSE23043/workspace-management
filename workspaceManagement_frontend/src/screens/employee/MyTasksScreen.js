@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import { loadTasks, updateTaskStatus, addTaskLog } from '../../services/taskService';
+import { loadTasks, updateTaskStatus, addTaskLog } from '../../services/taskApi';
 import { timeAgo } from '../../utils/timeAgo';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppButton from '../../components/common/AppButton';
@@ -111,7 +111,7 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
 
     try {
       // Persists status/progress to MySQL and refreshes local state with the
-      // saved list (taskService returns the fresh list).
+      // saved list (taskApi returns the fresh list).
       const nextTasks = await updateTaskStatus({
         taskId: task.id,
         status: taskState,

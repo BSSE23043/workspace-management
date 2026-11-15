@@ -34,7 +34,7 @@ export const SEED_COMPANY = {
 // EMPTY and are built up at runtime by real users:
 //   - employees punch attendance (services/attendanceService.checkIn / checkOut)
 //   - employees submit leave (services/leaveService.applyLeave)
-//   - managers create tasks (services/taskService.createTask)
+//   - managers create tasks (services/taskApi.createTask)
 //   - managers create client requirements (services/requirementService.addRequirement)
 // This removes all pre-filled demo data associated with the demo manager.
 // ---------------------------------------------------------------------------

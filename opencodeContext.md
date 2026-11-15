@@ -20,16 +20,19 @@
 - **Nature:** A semester Mobile-App-Dev course project deliberately built to showcase the full
   React Native syllabus (class components, all list types, all hooks, Context + Redux, AsyncStorage,
   drawer/tabs/stack navigation). Code contains "Syllabus Requirement:" comments.
-- **Backend:** **NONE.** The app is fully offline/seed-driven. Most domain data lives in Redux
-  (in-memory, seeded from `src/data/seedData.js`); the auth session is mirrored to AsyncStorage.
-  **Users are NOT in Redux at all** — AsyncStorage `@wms_users` is the single source of truth and
-  every screen loads the user list from it with local `useState`/`useEffect`. **Tasks and
-  requirements are NOT in Redux either** — AsyncStorage `@wms_tasks` / `@wms_requirements` are the
-  source of truth, read on demand by `services/taskService.js` / `services/requirementService.js`
-  (screens load them on mount + focus into local state; mutations read→change→write). The
-  user database is not seeded — it starts empty; accounts only exist via the Super Admin flow.
-  No HTTP/network calls anywhere (the `fetch` demos were removed with the
-  announcements feature — `fetch` is not in the syllabus concepts list).
+- **Backend:** task management is now DB-backed by `workspaceManagement_backend` (Node/Express +
+  MySQL); the frontend talks to it through `services/taskApi.js`. Everything else remains
+  offline/seed-driven. Most non-task domain data lives in Redux (in-memory, seeded from
+  `src/data/seedData.js`); the auth session is mirrored to AsyncStorage.
+  **Users are NOT in Redux at all** — AsyncStorage `@wms_users` remains the source of truth and
+  every screen loads the user list from it with local `useState`/`useEffect`. Those accounts are
+  mirrored into MySQL (`POST /api/users/sync`) so task foreign keys work.
+  **Requirements are NOT in Redux either** — AsyncStorage `@wms_requirements` remains the source of
+  truth, read on demand by `services/requirementService.js`.
+  **Tasks are NOT in Redux or `@wms_tasks`** — `services/taskApi.js` reads/writes them through the
+  REST API; screens keep the same load-on-mount + local `useState` pattern. The user database is not
+  seeded — it starts empty; accounts only exist via the Super Admin flow. Only task screens make HTTP
+  calls; the rest of the app remains offline.
 - **Blueprint:** `repo/workforce_management_system_developer_blueprint.md` (repo root) is the
   authoritative spec: role permission matrix, syllabus compliance matrix, formulas, and 6 phased
   build prompts. Consult it before large changes.
@@ -104,7 +107,7 @@ repo/                                  (git root; branches: main, Samer, Umar[cu
 - **Geofence** (`src/utils/geofence.js`): Haversine distance; punch blocked outside office radius (default **200 m**, Lahore campus 31.5204/74.3587).
 - **Salary** (`src/utils/salaryCalculator.js`): `unexcused = W − (present + paidLeave + unpaidLeave)`;
   `net = base − (unexcused × rateAbsent + unpaidLeave × rateUnpaid) + allowances`; W=22, 5000/3500 PKR rates; currency PKR.
-- **Dual-deadline conflict** (`src/services/taskService.js`): tasks carry internal engineer due vs external client due;
+- **Dual-deadline conflict** (`src/services/taskApi.js`): tasks carry internal engineer due vs external client due;
   `bufferDays`, `hasConflict` computed at `createTask`.
 - **Broadcast / reply timestamps** (`src/utils/timeAgo.js`): `timeAgo(createdAt)` → `Just now` / `12m ago` /
   `3h ago` / `18 Oct, 14:32`; returns `''` when an entry has no `createdAt` (older entries) so no false
@@ -126,7 +129,7 @@ src/
 ├── navigation/             AppNavigator + 5 role navigators + SuperAdminNavigator (see §4)
 ├── screens/                34 screens (see §6)
 ├── services/               storageService.js (AsyncStorage + seed/reset),
-│                           taskService.js + requirementService.js (load/save + mutations)
+│                           taskApi.js (task REST client) + requirementService.js (load/save + mutations)
 ├── store/                  index.js + slices/ (1 slice: theme — see §7)
 └── utils/                  geofence.js, imagePicker.js, permissions.js, salaryCalculator.js, superAdminConfig.js, timeAgo.js, validation.js
 ```
@@ -248,9 +251,10 @@ account + the admin-set Company Profile name loaded from `@wms_company` in `comp
 **State is in-memory only — the theme flag resets on reload and is restored from `@wms_theme_preference` at
 boot** (`App.js` → `ThemeBootstrap`). All reducers synchronous.
 **No `users` / `company` / `tasks` / `requirements` / `tickets` / `leaves` / `attendance` / `salary` slices** —
-those datasets live in AsyncStorage (`@wms_users`, `@wms_company`, `@wms_tasks`, `@wms_requirements`,
-`@wms_tickets`, `@wms_leaves`, `@wms_attendance`, `@wms_salary_config`) and are read/written through the matching
-`services/*Service.js` (screens hold them in local `useState`, load on mount + focus).
+tasks live in MySQL via `services/taskApi.js`; the other datasets live in AsyncStorage (`@wms_users`,
+`@wms_company`, `@wms_requirements`, `@wms_tickets`, `@wms_leaves`, `@wms_attendance`, `@wms_salary_config`)
+and are read/written through the matching `services/*Service.js` (screens hold them in local `useState`, load on
+mount + focus). `@wms_tasks` is no longer used.
 
 | Slice | State | Notable actions |
 |---|---|---|
@@ -272,11 +276,11 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
   `@wms_company` overlaid on `SEED_COMPANY` so the shape is always complete) / `saveCompanyProfile(payload)`
   (read → merge → write → return). Used by `AdminDashboardScreen` (org card) and `CompanyProfileScreen`
   (form load + save); the client `ProfileSettingsScreen` still reads `@wms_company` directly.
-- **`taskService.js`** — tasks no longer in Redux. `loadTasks()` / `saveTasks()` over
-  `@wms_tasks`; mutations `createTask` (computes bufferDays/hasConflict), `editTask`,
-  `updateTaskStatus`, `toggleMilestoneSync`, `addTaskLog`. Each mutation does
-  read → change → write → returns the fresh array, so screens do
-  `setTasks(await createTask({...}))`.
+- **`taskApi.js`** — tasks no longer in Redux or AsyncStorage. `loadTasks()` calls
+  `GET /api/tasks`; mutations `createTask`, `editTask`, `updateTaskStatus`,
+  `toggleMilestoneSync`, `addTaskLog` call the matching REST endpoints. Each mutation returns the
+  fresh task array, so screens still do `setTasks(await createTask({...}))`. SQL lives in
+  `workspaceManagement_backend/src/routes/taskRoutes.js`.
 - **`requirementService.js`** — same pattern over `@wms_requirements`:
   `loadRequirements()` / `saveRequirements()`; mutations `addRequirement`, `toggleMilestone`,
   `addMilestone`, `removeMilestone`, `publishBroadcast`, `addClientClarificationReply`,
@@ -314,9 +318,10 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
 
 ## 10. Known Caveats / Tech Debt
 
-- No backend; the Redux theme flag resets on app reload (restored from `@wms_theme_preference` at boot; the
-  auth session, users, company profile, tasks/requirements/tickets/leaves/attendance/salary all persist in
-  AsyncStorage and survive reloads).
+- Task management requires the Node/MySQL backend to be running; the Redux theme flag resets on app reload
+  (restored from `@wms_theme_preference` at boot; the auth session, users, company profile,
+  requirements/tickets/leaves/attendance/salary persist in AsyncStorage and survive reloads; tasks persist
+  in MySQL).
 - Plaintext passwords in AsyncStorage; Super Admin credentials hardcoded in `superAdminConfig.js` (fine for a course project).
 - Removing a Company Admin only removes them from AsyncStorage USERS (an already-open session of theirs would persist until logout).
 - All image assets are 1x1-px placeholder stubs (blueprint lists required real images).
@@ -535,7 +540,8 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
     written at first-run seed (`[]`) but never read back.
   - **Deleted** `store/slices/tasksSlice.js` + `store/slices/requirementsSlice.js`;
     `store/index.js` is now **5 slices** (`company, attendance, salary, leaves, tickets`).
-  - **New** `services/taskService.js` — `loadTasks()` / `saveTasks()` over `@wms_tasks` plus the
+  - **New** `services/taskService.js` (later renamed `services/taskApi.js` when tasks moved to MySQL)
+    — `loadTasks()` / `saveTasks()` over `@wms_tasks` plus the
     reducer logic moved verbatim into async mutations: `createTask` (bufferDays/hasConflict math),
     `editTask`, `updateTaskStatus`, `toggleMilestoneSync`, `addTaskLog`. Unused `rescheduleTask` /
     `resetTasks` dropped.
@@ -840,3 +846,13 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
   - Converted shared components (AppInput, HeaderBar, DatePickerModal) and all portal screens (auth, admin, employee, HR, manager, client, super-admin) plus AdminDrawerNavigator.
   - Removed all raw TouchableOpacity/Pressable usage and obsolete button styles.
   - Verified syntax with @babel/parser walker: **TOTAL FILES 75, FAILURES 0**.
+
+- **2026-11-15** - **Manager task management migrated from AsyncStorage to MySQL; frontend API client
+  renamed `taskService.js` -> `taskApi.js`.**
+  - Added `workspaceManagement_backend` (Node/Express + mysql2) with task and user-sync routes.
+  - `tasks` now has real `priority`, `is_milestone_synced` and `created_at` columns; new `task_logs`
+    table stores the manager/employee timeline instead of JSON inside `tasks.description`.
+  - `services/taskApi.js` keeps the same async function names (`loadTasks`, `createTask`, `editTask`,
+    `updateTaskStatus`, `toggleMilestoneSync`, `addTaskLog`) but calls the REST API; `@wms_tasks` is
+    no longer used. Manager task screens and the two employee task consumers were updated.
+  - Non-task modules (requirements, attendance, leaves, tickets, salary) remain AsyncStorage-backed.
