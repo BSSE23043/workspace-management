@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { fetchPlatformStats } from '../../services/api';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import CardButton from '../../components/common/CardButton';
@@ -24,41 +24,33 @@ export const SuperAdminDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('SUPER_ADMIN');
 
-  // Local state: platform statistics loaded from AsyncStorage
+  // Local state: platform statistics loaded from the MySQL backend
   const [adminCount, setAdminCount] = useState(0);
   const [companyCount, setCompanyCount] = useState(0);
 
-  // Load statistics from AsyncStorage once when the screen mounts
+  // Load statistics from the backend database on mount and whenever focused
   useEffect(() => {
     let isMounted = true;
 
     const loadStats = async () => {
-      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-
-      // Company Admins = every stored user whose role is ADMIN
-      const admins = storedUsers.filter((u) => u.role === 'ADMIN');
-
-      // Registered companies = unique company names of those admins
-      // (falls back to a generic label when no company name was provided)
-      const companyNames = [];
-      admins.forEach((admin) => {
-        const companyName = admin.companyName || 'Unassigned Company';
-        if (!companyNames.includes(companyName)) {
-          companyNames.push(companyName);
+      try {
+        const stats = await fetchPlatformStats();
+        if (isMounted) {
+          setAdminCount(Number(stats.adminCount || 0));
+          setCompanyCount(Number(stats.companyCount || 0));
         }
-      });
-
-      if (isMounted) {
-        setAdminCount(admins.length);
-        setCompanyCount(companyNames.length);
+      } catch (err) {
+        console.warn('[SuperAdminDashboard] Failed loading stats:', err);
       }
     };
 
     loadStats();
+    const unsubscribe = navigation.addListener('focus', loadStats);
     return () => {
       isMounted = false;
+      unsubscribe();
     };
-  }, []);
+  }, [navigation]);
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
