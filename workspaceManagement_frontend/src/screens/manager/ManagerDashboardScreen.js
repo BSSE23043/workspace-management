@@ -20,19 +20,25 @@ export const ManagerDashboardScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
-  // Tasks, requirements & punch logs are NOT in Redux anymore — they are read
-  // from AsyncStorage when this screen mounts, and again every time it regains
-  // focus (tab screens stay mounted, so focus is what keeps data fresh).
+  // Tasks, requirements & punch logs are read when this screen mounts, and
+  // again every time it regains focus (tab screens stay mounted, so focus is
+  // what keeps data fresh). Tasks now come from MySQL via the backend API.
   const [tasks, setTasks] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [taskError, setTaskError] = useState('');
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const loadData = async () => {
-      const storedTasks = await loadTasks();
+      try {
+        setTasks(await loadTasks());
+        setTaskError('');
+      } catch (err) {
+        setTaskError(err.message || 'Could not load tasks from the database.');
+      }
+
       const storedRequirements = await loadRequirements();
       const storedLogs = await loadAttendance();
-      setTasks(storedTasks);
       setRequirements(storedRequirements);
       setLogs(storedLogs);
       setIsDataLoaded(true);
@@ -153,6 +159,12 @@ export const ManagerDashboardScreen = ({ navigation }) => {
             <Text style={[styles.kpiLabel, { color: palette.textSecondary }]}>Requirements</Text>
           </View>
         </View>
+
+        {taskError ? (
+          <Text style={styles.dataErrorText}>
+            Task database unavailable: {taskError}
+          </Text>
+        ) : null}
 
         {/* Management Controls Navigation Rows */}
         <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
@@ -311,6 +323,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     rowGap: 10,
     marginBottom: 18,
+  },
+  dataErrorText: {
+    color: '#B91C1C',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: -8,
+    marginBottom: 14,
   },
   kpiCard: {
     width: '48%',

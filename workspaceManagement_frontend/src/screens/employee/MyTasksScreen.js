@@ -33,15 +33,22 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
   const palette = getRolePalette('EMPLOYEE');
   const scrollViewRef = useRef(null);
 
-  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // Tasks now come from MySQL through the backend API. Read them on mount and
   // refresh on focus, so a status change saved here (or by the manager in
   // another screen) shows the latest data next time the employee looks.
   const [tasks, setTasks] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [loadError, setLoadError] = useState('');
   useEffect(() => {
     const load = async () => {
-      setTasks(await loadTasks());
-      setIsDataLoaded(true);
+      try {
+        setTasks(await loadTasks());
+        setLoadError('');
+      } catch (err) {
+        setLoadError(err.message || 'Could not load tasks from the database.');
+      } finally {
+        setIsDataLoaded(true);
+      }
     };
     load();
     const unsubscribe = navigation.addListener('focus', load);
@@ -102,34 +109,44 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
     const pct = parseInt(progressPercent, 10);
     const validPct = isNaN(pct) ? task.progressPercent || 0 : Math.min(100, Math.max(0, pct));
 
-    // Writes the new status/progress to AsyncStorage and refreshes local state
-    // with the saved list (taskService hands it straight back).
-    const nextTasks = await updateTaskStatus({
-      taskId: task.id,
-      status: taskState,
-      progressPercent: validPct,
-      note: progressNote.trim() || `Progress recorded at ${validPct}%`,
-      author: currentUser?.name,
-    });
-    setTasks(nextTasks);
+    try {
+      // Persists status/progress to MySQL and refreshes local state with the
+      // saved list (taskService returns the fresh list).
+      const nextTasks = await updateTaskStatus({
+        taskId: task.id,
+        status: taskState,
+        progressPercent: validPct,
+        note: progressNote.trim() || `Progress recorded at ${validPct}%`,
+        author: currentUser?.name,
+        authorEmail: currentUser?.email,
+      });
+      setTasks(nextTasks);
 
-    Alert.alert(
-      'Progress Saved',
-      `Task ${task.code} updated to ${taskState.replace('_', ' ')} (${validPct}%). Manager notified.`
-    );
+      Alert.alert(
+        'Progress Saved',
+        `Task ${task.code} updated to ${taskState.replace('_', ' ')} (${validPct}%). Manager notified.`
+      );
+    } catch (err) {
+      Alert.alert('Task Database Error', err.message || 'Progress could not be saved.');
+    }
   };
 
   // Sends the employee's message onto the shared task timeline, so the
   // manager sees it on his "Chronological Progress Log" screen.
   const handleSendMessage = async () => {
     if (!messageText.trim() || !activeTask) return;
-    const nextTasks = await addTaskLog({
-      taskId: activeTask.id,
-      note: messageText.trim(),
-      author: currentUser?.name,
-    });
-    setTasks(nextTasks);
-    setMessageText('');
+    try {
+      const nextTasks = await addTaskLog({
+        taskId: activeTask.id,
+        note: messageText.trim(),
+        author: currentUser?.name,
+        authorEmail: currentUser?.email,
+      });
+      setTasks(nextTasks);
+      setMessageText('');
+    } catch (err) {
+      Alert.alert('Task Database Error', err.message || 'The message could not be sent.');
+    }
   };
 
   // Wait for the first AsyncStorage read so the list doesn't flash its empty
@@ -171,6 +188,12 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {loadError ? (
+          <View style={styles.dbErrorBox}>
+            <Text style={styles.dbErrorText}>Task database unavailable: {loadError}</Text>
+          </View>
+        ) : null}
+
         {/* Active Task Workspace Card */}
         {activeTask && (
           <View style={[styles.featuredCard, { backgroundColor: palette.card, borderColor: palette.primary, borderWidth: 1.5 }]}>
@@ -431,6 +454,19 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
+  },
+  dbErrorBox: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#F87171',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+  },
+  dbErrorText: {
+    color: '#991B1B',
+    fontSize: 11,
+    fontWeight: '600',
   },
   featuredCard: {
     borderRadius: 14,

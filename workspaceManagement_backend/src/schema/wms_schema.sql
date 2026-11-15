@@ -160,11 +160,14 @@ CREATE TABLE tasks (
     created_by_email VARCHAR(190) NOT NULL,
     title VARCHAR(200) NOT NULL,
     description TEXT NULL,
-    status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+    status VARCHAR(30) NOT NULL DEFAULT 'TO_DO' COMMENT 'TO_DO | IN_PROGRESS | COMPLETED',
+    priority VARCHAR(20) NOT NULL DEFAULT 'MEDIUM' COMMENT 'LOW | MEDIUM | HIGH | CRITICAL',
     progress_percent TINYINT UNSIGNED NOT NULL DEFAULT 0,
     internal_due_date DATE NULL,
     client_due_date DATE NULL,
     internal_remaining_days INT,
+    is_milestone_synced TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     has_conflict TINYINT(1) GENERATED ALWAYS AS (
         CASE
             WHEN internal_due_date IS NOT NULL
@@ -194,6 +197,28 @@ CREATE TABLE task_assignments (
     CONSTRAINT fk_task_assignments_user
         FOREIGN KEY (user_email) REFERENCES users (email)
         ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Task progress log / message timeline shown on the manager and employee
+-- task detail screens.
+CREATE TABLE task_logs (
+    id VARCHAR(36) NOT NULL COMMENT 'UUID',
+    task_id VARCHAR(20) NOT NULL,
+    author_email VARCHAR(190) NULL,
+    author_name VARCHAR(120) NULL,
+    note TEXT NOT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    INDEX idx_task_logs_task (task_id, created_at),
+    INDEX idx_task_logs_author (author_email),
+    CONSTRAINT fk_task_logs_task
+        FOREIGN KEY (task_id) REFERENCES tasks (id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    CONSTRAINT fk_task_logs_author
+        FOREIGN KEY (author_email) REFERENCES users (email)
+        ON DELETE SET NULL
         ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

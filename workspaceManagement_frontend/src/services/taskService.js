@@ -1,215 +1,373 @@
+// ---------------------------------------------------------------------------
+// TASK SERVICE — the ONLY place the app talks to the task database.
+//
+// This file is NOT read-only. It is the API client for the task backend, so it
+// both READS tasks from MySQL and WRITES changes back to MySQL.
+//
+//   READ operations (GET)                  WRITE operations (POST / PATCH)
+//   -----------------------------------    ------------------------------------
+//   loadTasks()       GET /api/tasks       createTask()           POST /tasks
+//                                          editTask()             PATCH /tasks/:id
+//                                          updateTaskStatus()     PATCH /tasks/:id/status
+//                                          toggleMilestoneSync()  PATCH /tasks/:id/milestone-sync
+//                                          addTaskLog()           POST /tasks/:id/logs
+//
+// Every write function returns the fresh task list, so screens only do:
+//
+//   const nextTasks = await createTask({ ... });
+//   setTasks(nextTasks);
+//
+// WHERE THE DATA COMES FROM:
+//   - Task data ............ MySQL `tasks` + `task_assignments` tables (via API)
+//   - Task logs/priority ... MySQL columns `tasks.priority`,
+//                            `tasks.is_milestone_synced`, `tasks.created_at`
+//                            and the `task_logs` table
+//   - User accounts ........ still AsyncStorage `@wms_users`; this file mirrors
+//                            them to MySQL (POST /api/users/sync) so task
+//                            foreign keys work, then maps app IDs <-> emails.
+//   - Company scoping ...... the logged-in user's companyId from AsyncStorage.
+//
+// IMPORTANT: no task is read from or written to `@wms_tasks` anymore.
+// ---------------------------------------------------------------------------
+
+import { API_BASE_URL } from '../config/api';
 import storageService, { STORAGE_KEYS } from './storageService';
+import { timeAgo } from '../utils/timeAgo';
 
 // ---------------------------------------------------------------------------
-// TASK SERVICE — tasks are NO LONGER stored in Redux.
-//
-// AsyncStorage (@wms_tasks) is the single source of truth. Every screen that
-// needs tasks calls loadTasks() when it mounts (and again on focus), and each
-// mutation below does the same three steps:
-//
-//   1. read the current list from AsyncStorage
-//   2. apply the change (same logic the old tasksSlice reducers had)
-//   3. write the list back and return it
-//
-// So a screen only ever writes two lines:
-//
-//   const next = await createTask({ ... });
-//   setTasks(next);
+// HTTP helpers
 // ---------------------------------------------------------------------------
 
-// Read the whole list (never returns null — always an array).
-export const loadTasks = async () => {
-  const stored = await storageService.getItem(STORAGE_KEYS.TASKS, []);
+const request = async (path, options = {}) => {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+
+  const raw = await response.text();
+  let data = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      (data && (data.error || data.message)) || `Request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  return data;
+};
+
+const loadStoredUsers = async () => {
+  const stored = await storageService.getItem(STORAGE_KEYS.USERS, []);
   return Array.isArray(stored) ? stored : [];
 };
 
-// Persist a list (used by the mutations below and by any bulk write).
-export const saveTasks = async (tasks) => {
-  await storageService.setItem(STORAGE_KEYS.TASKS, tasks);
-  return tasks;
+const loadSessionCompanyId = async () => {
+  const session = await storageService.getItem(STORAGE_KEYS.AUTH_CURRENT_USER, null);
+  return session?.companyId || null;
 };
 
-// Recalculates the dual-deadline buffer that every task edit must refresh.
-const applyConflict = (task) => {
-  const intDate = new Date(task.internalDeadline);
-  const cliDate = new Date(task.clientDeadline);
-  const diffMs = cliDate.getTime() - intDate.getTime();
-  task.bufferDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  task.hasConflict = task.bufferDays < 0;
-  task.conflictDetails = task.hasConflict
-    ? `${task.title} • ${Math.abs(task.bufferDays)}d slack • Internal Employee Due: ${task.internalDeadline} vs External Client Due: ${task.clientDeadline}`
-    : null;
+// ---------------------------------------------------------------------------
+// Users mirror
+//
+// tasks.created_by_email and task_assignments.user_email are FOREIGN KEYs to
+// users(email), so the accounts that live in AsyncStorage must exist in MySQL
+// before a task can be written. We sync them once per app session, and force a
+// refresh before creating/editing a task (the Admin may have just added a user).
+// ---------------------------------------------------------------------------
+
+let usersSyncPromise = null;
+
+export const syncUsersFromStorage = async ({ force = false } = {}) => {
+  if (usersSyncPromise && !force) {
+    return usersSyncPromise;
+  }
+
+  usersSyncPromise = (async () => {
+    const users = await loadStoredUsers();
+    if (users.length === 0) return { synced: 0 };
+    return request('/users/sync', {
+      method: 'POST',
+      body: JSON.stringify({ users }),
+    });
+  })();
+
+  // A failed sync should be retried on the next call instead of being cached.
+  usersSyncPromise = usersSyncPromise.catch((err) => {
+    usersSyncPromise = null;
+    throw err;
+  });
+
+  return usersSyncPromise;
 };
 
-// Manager creates a task for one or more engineers.
+// ---------------------------------------------------------------------------
+// Local user lookup (id <-> email)
+// ---------------------------------------------------------------------------
+
+const buildUserMaps = (users) => {
+  const byEmail = new Map();
+  const byId = new Map();
+
+  users.forEach((user) => {
+    if (user.email) byEmail.set(user.email.toLowerCase(), user);
+    if (user.id) byId.set(String(user.id), user);
+  });
+
+  return { users, byEmail, byId };
+};
+
+const resolveUserEmail = (maps, { email, name } = {}) => {
+  if (email) {
+    const found = maps.byEmail.get(String(email).toLowerCase());
+    return found ? found.email : email;
+  }
+
+  if (name) {
+    const found = maps.users.find((user) => user.name === name);
+    if (found && found.email) return found.email;
+  }
+
+  return null;
+};
+
+// Resolves the current manager's email for tasks.created_by_email.
+const resolveCreatorEmail = (maps, { createdByEmail, createdByName } = {}) => {
+  if (createdByEmail) {
+    const found = maps.byEmail.get(String(createdByEmail).toLowerCase());
+    return found ? found.email : createdByEmail;
+  }
+
+  const byName = maps.users.find(
+    (user) =>
+      user.name === createdByName && (user.role === 'MANAGER' || user.role === 'ADMIN')
+  );
+  if (byName && byName.email) return byName.email;
+
+  throw new Error(
+    'Could not determine the manager account. Make sure you are signed in with a Manager account that has an email address.'
+  );
+};
+
+const resolveAssigneeEmails = (maps, payload) => {
+  const fromIds = (payload.assignedToIds || [])
+    .map((id) => maps.byId.get(String(id))?.email)
+    .filter(Boolean);
+
+  if (fromIds.length > 0) return Array.from(new Set(fromIds));
+
+  const fromEmails = (payload.assignedToEmails || []).filter(Boolean);
+  if (fromEmails.length > 0) return Array.from(new Set(fromEmails));
+
+  // Compatibility fallback for callers that only pass names.
+  const names = payload.assignedToNames || (payload.assignedToName ? [payload.assignedToName] : []);
+  return Array.from(
+    new Set(
+      names
+        .map((name) => maps.users.find((user) => user.name === name)?.email)
+        .filter(Boolean)
+    )
+  );
+};
+
+// ---------------------------------------------------------------------------
+// DB task -> app task
+// ---------------------------------------------------------------------------
+
+const mapTaskFromApi = (apiTask, maps) => {
+  const assignedToEmails = apiTask.assignedToEmails || [];
+  const assignedToIds = assignedToEmails.map(
+    (email) => maps.byEmail.get(String(email).toLowerCase())?.id || email
+  );
+  const assignedToNames = (apiTask.assignedToNames || []).length
+    ? apiTask.assignedToNames
+    : assignedToEmails;
+
+  return {
+    ...apiTask,
+    code: apiTask.code || `#${apiTask.id}`,
+    assignedToEmails,
+    assignedToIds,
+    assignedToId: assignedToIds[0] || '',
+    assignedToNames,
+    assignedToName: assignedToNames.join(', ') || 'Unassigned',
+    logs: (apiTask.logs || []).map((log) => {
+      const timestamp = log.createdAt ? new Date(log.createdAt).getTime() : null;
+      return {
+        ...log,
+        createdAt: timestamp,
+        time: timestamp ? timeAgo(timestamp) : '',
+      };
+    }),
+  };
+};
+
+const withCompanyFilter = (companyId) =>
+  companyId ? `?companyId=${encodeURIComponent(companyId)}` : '';
+
+// ---------------------------------------------------------------------------
+// Public API
+//
+// READ FUNCTIONS  : loadTasks
+// WRITE FUNCTIONS : createTask, editTask, updateTaskStatus,
+//                   toggleMilestoneSync, addTaskLog
+// ---------------------------------------------------------------------------
+
+// ------------------------------- READ --------------------------------------
+// Reads every task for the current company from MySQL (GET /api/tasks).
+// Never returns null — always an array.
+export const loadTasks = async (options = {}) => {
+  await syncUsersFromStorage();
+
+  const companyId = options.companyId || (await loadSessionCompanyId());
+  const data = await request(`/tasks${withCompanyFilter(companyId)}`);
+  const users = await loadStoredUsers();
+  const maps = buildUserMaps(users);
+
+  return (data?.tasks || []).map((task) => mapTaskFromApi(task, maps));
+};
+
+// ------------------------------- WRITE -------------------------------------
+// Manager creates a task for one or more engineers (POST /api/tasks).
 export const createTask = async (payload) => {
-  const {
-    title,
-    description,
-    assignedToId,
-    assignedToName,
-    assignedToIds = [],
-    assignedToNames = [],
-    createdByName,
-    requirementId,
-    priority = 'MEDIUM',
-    internalDeadline,
-    clientDeadline,
-  } = payload;
+  await syncUsersFromStorage({ force: true });
 
-  const tasks = await loadTasks();
+  const users = await loadStoredUsers();
+  const maps = buildUserMaps(users);
 
-  const intDate = new Date(internalDeadline);
-  const cliDate = new Date(clientDeadline);
-  const diffMs = cliDate.getTime() - intDate.getTime();
-  const bufferDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  const hasConflict = bufferDays < 0;
+  const companyId = payload.companyId || (await loadSessionCompanyId());
+  const assignedToEmails = resolveAssigneeEmails(maps, payload);
 
-  const primaryId = assignedToId || (assignedToIds.length > 0 ? assignedToIds[0] : '');
-  const primaryName = assignedToName || (assignedToNames.length > 0 ? assignedToNames.join(', ') : 'Unassigned');
+  if (assignedToEmails.length === 0) {
+    throw new Error(
+      'No assignee email found. The selected engineer must have an email address on their account.'
+    );
+  }
 
-  const newTask = {
-    id: `TSK-${Math.floor(400 + Math.random() * 500)}`,
-    code: `#TSK-${Math.floor(400 + Math.random() * 500)}`,
-    title,
-    description: description || `Task assigned by ${createdByName || 'your Manager'}`,
-    assignedToId: primaryId,
-    assignedToName: primaryName,
-    assignedToIds: assignedToIds.length > 0 ? assignedToIds : [primaryId],
-    assignedToNames: assignedToNames.length > 0 ? assignedToNames : [primaryName],
-    createdByName: createdByName || null,
-    requirementId,
-    priority,
-    internalDeadline,
-    clientDeadline,
-    bufferDays,
-    hasConflict,
-    isMilestoneSynced: false,
-    conflictDetails: hasConflict
-      ? `${title} • ${Math.abs(bufferDays)}d slack • Internal Employee Due: ${internalDeadline} vs External Client Due: ${clientDeadline}`
-      : null,
-    status: 'TO_DO',
-    progressPercent: 0,
-    logs: [
-      {
-        time: 'Just now',
-        // Real timestamp so the employee's message list can show a "time ago"
-        // label, exactly like the requirement broadcasts do.
-        createdAt: Date.now(),
-        author: createdByName || null,
-        note: `Task created and assigned to ${primaryName} by ${createdByName || 'Management'}.`,
-      },
-    ],
+  const createdByEmail = resolveCreatorEmail(maps, payload);
+
+  await request('/tasks', {
+    method: 'POST',
+    body: JSON.stringify({
+      createdByEmail,
+      title: payload.title,
+      description: payload.description,
+      priority: payload.priority,
+      internalDeadline: payload.internalDeadline,
+      clientDeadline: payload.clientDeadline,
+      assignedToEmails,
+    }),
+  });
+
+  // Keep the screen contract (a mutation returns the fresh list). The newly
+  // created task is included by the follow-up read.
+  return loadTasks({ companyId });
+};
+
+// Manager edits title / description / priority / deadlines / assignees
+// (PATCH /api/tasks/:id).
+export const editTask = async (payload) => {
+  await syncUsersFromStorage({ force: true });
+
+  const users = await loadStoredUsers();
+  const maps = buildUserMaps(users);
+  const companyId = payload.companyId || (await loadSessionCompanyId());
+
+  const body = {
+    title: payload.title,
+    description: payload.description,
+    priority: payload.priority,
+    internalDeadline: payload.internalDeadline,
+    clientDeadline: payload.clientDeadline,
+    authorEmail: resolveUserEmail(maps, {
+      email: payload.authorEmail,
+      name: payload.author,
+    }),
+    authorName: payload.author || null,
   };
 
-  tasks.unshift(newTask);
-  return saveTasks(tasks);
-};
-
-// Manager edits title / description / priority / deadlines / assignees.
-export const editTask = async (payload) => {
-  const {
-    taskId,
-    title,
-    description,
-    priority,
-    internalDeadline,
-    clientDeadline,
-    assignedToIds,
-    assignedToNames,
-    author,
-  } = payload;
-
-  const tasks = await loadTasks();
-  const task = tasks.find((t) => t.id === taskId);
-
-  if (task) {
-    if (title) task.title = title;
-    if (description !== undefined) task.description = description;
-    if (priority) task.priority = priority;
-    if (internalDeadline) task.internalDeadline = internalDeadline;
-    if (clientDeadline) task.clientDeadline = clientDeadline;
-    if (assignedToIds && assignedToIds.length > 0) {
-      task.assignedToIds = assignedToIds;
-      task.assignedToId = assignedToIds[0];
-    }
-    if (assignedToNames && assignedToNames.length > 0) {
-      task.assignedToNames = assignedToNames;
-      task.assignedToName = assignedToNames.join(', ');
-    }
-
-    applyConflict(task);
-
-    task.logs.unshift({
-      time: 'Just now',
-      createdAt: Date.now(),
-      author: author || 'Manager',
-      note: `Manager edited task parameters and deadlines.`,
-    });
+  if (payload.assignedToIds && payload.assignedToIds.length > 0) {
+    body.assignedToEmails = resolveAssigneeEmails(maps, payload);
   }
 
-  return saveTasks(tasks);
+  await request(`/tasks/${encodeURIComponent(payload.taskId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+
+  return loadTasks({ companyId });
 };
 
-// Manager marks / unmarks a task as ready for client milestone sync.
+// Manager marks / unmarks a task as ready for client milestone sync
+// (PATCH /api/tasks/:id/milestone-sync).
 export const toggleMilestoneSync = async (payload) => {
-  const { taskId, isSynced, author } = payload;
-  const tasks = await loadTasks();
-  const task = tasks.find((t) => t.id === taskId);
+  const users = await loadStoredUsers();
+  const maps = buildUserMaps(users);
+  const companyId = payload.companyId || (await loadSessionCompanyId());
 
-  if (task) {
-    task.isMilestoneSynced = isSynced;
-    task.logs.unshift({
-      time: 'Just now',
-      createdAt: Date.now(),
-      author: author || 'Manager',
-      note: isSynced
-        ? 'Marked as Ready for Client Milestone Sync'
-        : 'Reverted Client Milestone Sync status',
-    });
-  }
+  await request(`/tasks/${encodeURIComponent(payload.taskId)}/milestone-sync`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      isSynced: payload.isSynced,
+      authorEmail: resolveUserEmail(maps, {
+        email: payload.authorEmail,
+        name: payload.author,
+      }),
+      authorName: payload.author || null,
+    }),
+  });
 
-  return saveTasks(tasks);
+  return loadTasks({ companyId });
 };
 
 // Status / progress change — used by the manager AND by the employee's own
-// "save progress" action.
+// "save progress" action (PATCH /api/tasks/:id/status).
 export const updateTaskStatus = async (payload) => {
-  const { taskId, status, progressPercent, note, author } = payload;
-  const tasks = await loadTasks();
-  const task = tasks.find((t) => t.id === taskId);
+  const users = await loadStoredUsers();
+  const maps = buildUserMaps(users);
+  const companyId = payload.companyId || (await loadSessionCompanyId());
 
-  if (task) {
-    if (status) task.status = status;
-    if (progressPercent !== undefined) task.progressPercent = progressPercent;
-    if (note) {
-      task.logs.unshift({
-        time: 'Just now',
-        createdAt: Date.now(),
-        author: author || null,
-        note,
-      });
-    }
-  }
+  await request(`/tasks/${encodeURIComponent(payload.taskId)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      status: payload.status,
+      progressPercent: payload.progressPercent,
+      note: payload.note,
+      authorEmail: resolveUserEmail(maps, {
+        email: payload.authorEmail,
+        name: payload.author,
+      }),
+      authorName: payload.author || null,
+    }),
+  });
 
-  return saveTasks(tasks);
+  return loadTasks({ companyId });
 };
 
-// Posts a message on the task timeline — used by the manager (his notes) and
-// by the employee (his replies), the same way requirement broadcasts work.
+// Posts a message on the shared task timeline (POST /api/tasks/:id/logs).
 export const addTaskLog = async (payload) => {
-  const { taskId, note, author } = payload;
-  const tasks = await loadTasks();
-  const task = tasks.find((t) => t.id === taskId);
+  const users = await loadStoredUsers();
+  const maps = buildUserMaps(users);
+  const companyId = payload.companyId || (await loadSessionCompanyId());
 
-  if (task && note) {
-    task.logs.unshift({
-      time: 'Just now',
-      createdAt: Date.now(),
-      author: author || null,
-      note,
-    });
-  }
+  await request(`/tasks/${encodeURIComponent(payload.taskId)}/logs`, {
+    method: 'POST',
+    body: JSON.stringify({
+      note: payload.note,
+      authorEmail: resolveUserEmail(maps, {
+        email: payload.authorEmail,
+        name: payload.author,
+      }),
+      authorName: payload.author || null,
+    }),
+  });
 
-  return saveTasks(tasks);
+  return loadTasks({ companyId });
 };

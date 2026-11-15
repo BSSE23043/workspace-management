@@ -31,14 +31,22 @@ export const TaskManagementScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('MANAGER');
 
-  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
-  // refresh on every focus so a task created here (or elsewhere) shows up.
+  // Tasks now come from the MySQL database through the backend API. Read them
+  // on mount and refresh on every focus so a task created/edited elsewhere
+  // (manager board, employee progress, …) shows up.
   const [tasks, setTasks] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [loadError, setLoadError] = useState('');
   useEffect(() => {
     const load = async () => {
-      setTasks(await loadTasks());
-      setIsDataLoaded(true);
+      try {
+        setTasks(await loadTasks());
+        setLoadError('');
+      } catch (err) {
+        setLoadError(err.message || 'Could not load tasks from the database.');
+      } finally {
+        setIsDataLoaded(true);
+      }
     };
     load();
     const unsubscribe = navigation.addListener('focus', load);
@@ -114,32 +122,40 @@ export const TaskManagementScreen = ({ navigation }) => {
     const assignedUsers = engineers.filter((e) => assignedToIds.includes(e.id));
     const assignedNames = assignedUsers.map((e) => e.name);
 
-    // Write the new task to AsyncStorage and refresh local state with the
-    // saved list (taskService saves it and hands the list straight back).
-    const nextTasks = await createTask({
-      title: taskTitle.trim(),
-      assignedToIds,
-      // The real variable above is called assignedNames — passing a shorthand
-      // named assignedToNames here referenced an undeclared identifier and
-      // crashed with "Property assignedToNames doesn't exist" on button press.
-      assignedToNames: assignedNames,
-      assignedToId: assignedToIds[0],
-      assignedToName: assignedNames.join(', '),
-      // The manager who creates the task, so the employee's task card can show
-      // the real name instead of a generic role label.
-      createdByName: currentUser?.name,
-      priority,
-      internalDeadline,
-      clientDeadline,
-    });
-    setTasks(nextTasks);
+    try {
+      // Writes the new task to MySQL through the backend API and refreshes the
+      // board with the saved list (taskService returns the fresh list).
+      const nextTasks = await createTask({
+        title: taskTitle.trim(),
+        assignedToIds,
+        // The real variable above is called assignedNames — passing a shorthand
+        // named assignedToNames here referenced an undeclared identifier and
+        // crashed with "Property assignedToNames doesn't exist" on button press.
+        assignedToNames: assignedNames,
+        assignedToId: assignedToIds[0],
+        assignedToName: assignedNames.join(', '),
+        // The manager who creates the task. Email is the DB identifier
+        // (users PK); the name is kept for display.
+        createdByEmail: currentUser?.email,
+        createdByName: currentUser?.name,
+        priority,
+        internalDeadline,
+        clientDeadline,
+      });
+      setTasks(nextTasks);
 
-    setTaskTitle('');
-    setHasFormError(false);
-    Alert.alert(
-      'Task Created & Assigned',
-      `Task "${taskTitle}" assigned to ${assignedNames.join(', ')}.`
-    );
+      setTaskTitle('');
+      setHasFormError(false);
+      Alert.alert(
+        'Task Created & Assigned',
+        `Task "${taskTitle}" assigned to ${assignedNames.join(', ')}.`
+      );
+    } catch (err) {
+      Alert.alert(
+        'Task Database Error',
+        err.message || 'The task could not be saved. Is the backend server running?'
+      );
+    }
   };
 
   // Wait for the first AsyncStorage read so the board doesn't flash its
@@ -364,6 +380,20 @@ export const TaskManagementScreen = ({ navigation }) => {
             Tap any task to review timeline or sync with client milestone
           </Text>
         </View>
+
+        {/* Database / backend connection error (task data now lives in MySQL) */}
+        {loadError ? (
+          <View style={styles.dbErrorBox}>
+            <Icon name="alert-triangle" size={16} color="#DC2626" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dbErrorTitle}>Task database unavailable</Text>
+              <Text style={styles.dbErrorText}>{loadError}</Text>
+              <Text style={styles.dbErrorHint}>
+                Start MySQL and the backend (npm run dev), then reopen this tab.
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* Task Cards List */}
         {filteredTasks.map((task) => {
@@ -753,6 +783,32 @@ const styles = StyleSheet.create({
   taskListSubtitle: {
     fontSize: 11,
     marginTop: 2,
+  },
+  dbErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#F87171',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  dbErrorTitle: {
+    color: '#991B1B',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  dbErrorText: {
+    color: '#991B1B',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  dbErrorHint: {
+    color: '#B91C1C',
+    fontSize: 10,
+    marginTop: 4,
   },
   footerRight: {
     flexDirection: 'row',
