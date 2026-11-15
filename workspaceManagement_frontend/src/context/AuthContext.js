@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import storageService, { STORAGE_KEYS } from '../services/storageService';
 import { isValidEmail, isValidPassword } from '../utils/validation';
+import { loginUser, updateUserProfile } from '../services/api';
 // Hardcoded Super Admin account (platform owner) — see superAdminConfig.js
 import {
   SUPER_ADMIN_EMAIL,
@@ -14,29 +14,9 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [isSplashLoading, setIsSplashLoading] = useState(true);
 
-  // Initialize seed data and restore session
   useEffect(() => {
-    let isMounted = true;
-    (async () => {
-      try {
-        await storageService.initializeSeedDataIfNeeded();
-        const savedUser = await storageService.getItem(STORAGE_KEYS.AUTH_CURRENT_USER, null);
-        if (isMounted) {
-          // If no session exists, default to Admin or null
-          setCurrentUser(savedUser);
-        }
-      } catch (err) {
-        console.warn('[AuthContext] Session restore error:', err);
-      } finally {
-        if (isMounted) {
-          // Brief splash timer to simulate network/system initialization
-          setTimeout(() => setIsSplashLoading(false), 500);
-        }
-      }
-    })();
-    return () => {
-      isMounted = false;
-    };
+    const timer = setTimeout(() => setIsSplashLoading(false), 500);
+    return () => clearTimeout(timer);
   }, []);
 
   const login = async (email, password) => {
@@ -47,90 +27,52 @@ export const AuthProvider = ({ children }) => {
       return { success: false, error: '! Password must be at least 6 characters' };
     }
 
-    // ------------------------------------------------------------------
-    // Step 1: Check the hardcoded Super Admin account first.
-    // Logging in with the Super Admin email opens the Super Admin portal,
-    // where Company Admin accounts can be added or removed.
-    // ------------------------------------------------------------------
+    // Step 1: Check the hardcoded Super Admin account first
     if (email.toLowerCase().trim() === SUPER_ADMIN_EMAIL) {
       if (password !== SUPER_ADMIN_PASSWORD) {
         return { success: false, error: 'Incorrect password entered' };
       }
       setCurrentUser(SUPER_ADMIN_USER);
-      await storageService.setItem(STORAGE_KEYS.AUTH_CURRENT_USER, SUPER_ADMIN_USER);
       return { success: true, user: SUPER_ADMIN_USER };
     }
 
-    // ------------------------------------------------------------------
-    // Step 2: Regular login flow — look up the user (Company Admins created
-    // by the Super Admin, plus every user those admins have provisioned)
-    // in AsyncStorage. There are no demo/seed users anymore.
-    // ------------------------------------------------------------------
-    const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-    const user = storedUsers.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase().trim()
-    );
-
-    if (!user) {
-      return { success: false, error: 'No user found with this email address' };
+    // Step 2: Authenticate user against the MySQL backend database
+    try {
+      const res = await loginUser(email.toLowerCase().trim(), password);
+      setCurrentUser(res.user);
+      return { success: true, user: res.user };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.message || 'Unable to authenticate with database server',
+      };
     }
-
-    if (user.password && user.password !== password) {
-      return { success: false, error: 'Incorrect password entered' };
-    }
-
-    if (user.isActive === false) {
-      return { success: false, error: 'Account has been deactivated. Contact Admin.' };
-    }
-
-    // Backfill a companyId for any Admin that predates company-scoping (e.g.
-    // accounts created before the Super Admin flow started assigning one).
-    // Without this, every employee the Admin creates would be saved with no
-    // companyId and then removed by the one-time demo-user cleanup — making
-    // new users "vanish" after a reload. We persist the backfilled id so all
-    // future users this Admin provisions are correctly company-scoped.
-    if (user.role === 'ADMIN' && !user.companyId) {
-      const backfilledId = `CO-${Math.floor(100 + Math.random() * 900)}`;
-      user.companyId = backfilledId;
-      const updatedUsers = storedUsers.map((u) =>
-        u.id === user.id ? { ...u, companyId: backfilledId } : u
-      );
-      await storageService.setItem(STORAGE_KEYS.USERS, updatedUsers);
-    }
-
-    setCurrentUser(user);
-    await storageService.setItem(STORAGE_KEYS.AUTH_CURRENT_USER, user);
-    return { success: true, user };
   };
 
-  // NOTE: The old public "register" (self sign-up) function was removed.
-  // Accounts are now created by the Super Admin from the Super Admin portal
-  // (Company Admin accounts) and by Company Admins from the Admin portal
-  // (HR / Manager / Employee / Client accounts).
-
-  // Single update function for the logged-in user: merges any fields into the
-  // session user and mirrors them to the stored users list, so both stay in
-  // sync. Used by every profile screen (avatar, name, title, phone, ...).
+  // Single update function for the logged-in user: persists changes to the
+  // MySQL users table and updates the active session state.
   const updateCurrentUser = async (fields) => {
     if (!currentUser) {
       return { success: false, error: 'No active session.' };
     }
-    const updated = { ...currentUser, ...fields };
-    setCurrentUser(updated);
-    await storageService.setItem(STORAGE_KEYS.AUTH_CURRENT_USER, updated);
-
-    // Also mirror the same fields onto this user in the stored users list
-    const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-    const updatedUsers = storedUsers.map((u) =>
-      u.id === currentUser.id ? { ...u, ...fields } : u
-    );
-    await storageService.setItem(STORAGE_KEYS.USERS, updatedUsers);
-    return { success: true, user: updated };
+    try {
+      const res = await updateUserProfile({
+        email: currentUser.email,
+        ...fields,
+      });
+      const updated = { ...currentUser, ...res.user, ...fields };
+      setCurrentUser(updated);
+      return { success: true, user: updated };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.message || 'Failed to update profile in database.',
+      };
+    }
   };
 
   const logout = async () => {
     setCurrentUser(null);
-    await storageService.removeItem(STORAGE_KEYS.AUTH_CURRENT_USER);
   };
 
   return (
