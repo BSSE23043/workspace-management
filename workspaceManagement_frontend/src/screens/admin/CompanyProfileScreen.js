@@ -9,6 +9,7 @@ import {
   Modal,
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
+import { useAuth } from '../../context/AuthContext';
 import { loadCompanyProfile, saveCompanyProfile } from '../../services/companyService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
@@ -31,6 +32,7 @@ const ALL_DAYS = [
 
 export const CompanyProfileScreen = ({ navigation }) => {
   const { getRolePalette, isDark } = useTheme();
+  const { currentUser } = useAuth();
   const palette = getRolePalette('ADMIN');
 
   const [mapModalVisible, setMapModalVisible] = useState(false);
@@ -45,11 +47,10 @@ export const CompanyProfileScreen = ({ navigation }) => {
   const [workingDaysPerMonth, setWorkingDaysPerMonth] = useState('22');
   const [absenceDeduction, setAbsenceDeduction] = useState('5000');
 
-  // The company profile now lives in AsyncStorage (it was removed from Redux) —
-  // load the saved values once on mount and seed the form fields from them.
+  // Load the company profile from the MySQL backend once on mount
   useEffect(() => {
     (async () => {
-      const company = await loadCompanyProfile();
+      const company = await loadCompanyProfile(currentUser?.companyId);
       setName(company.name || '');
       setMainCampus(company.mainCampus || '');
       setTimezone(company.timezone || '');
@@ -62,7 +63,7 @@ export const CompanyProfileScreen = ({ navigation }) => {
       setWorkingDaysPerMonth(String(company.standardWorkingDaysPerMonth || 22));
       setAbsenceDeduction(String(company.defaultAbsenceDeduction || 5000));
     })();
-  }, []);
+  }, [currentUser?.companyId]);
 
   const toggleDay = (dayKey) => {
     if (workingDays.includes(dayKey)) {
@@ -84,10 +85,18 @@ export const CompanyProfileScreen = ({ navigation }) => {
       standardWorkingDaysPerMonth: parseInt(workingDaysPerMonth, 10) || 22,
       defaultAbsenceDeduction: parseInt(absenceDeduction, 10) || 5000,
     };
-    // Persist to AsyncStorage — the company profile's single source of truth
-    // (same read → merge → write pattern as the other *Service.js files).
-    await saveCompanyProfile(payload);
-    Alert.alert('Configuration Saved', 'Company profile and main campus geofence policy updated.');
+    try {
+      await saveCompanyProfile(currentUser?.companyId, payload);
+      Alert.alert(
+        'Configuration Saved',
+        'Company profile and main campus geofence policy updated.'
+      );
+    } catch (err) {
+      Alert.alert(
+        'Save Failed',
+        err.message || 'Could not save company profile to database.'
+      );
+    }
   };
 
   return (

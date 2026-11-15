@@ -18,7 +18,11 @@ import CardButton from '../../components/common/CardButton';
 import { getAvatarSource } from '../../assets/images';
 import { isValidEmail } from '../../utils/validation';
 import { pickProfilePictureFromGallery } from '../../utils/imagePicker';
-import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import {
+  fetchCompanyUsersApi,
+  createCompanyUserApi,
+  updateCompanyUserApi,
+} from '../../services/api';
 
 const SYSTEM_ROLES = [
   { id: 'EMPLOYEE', label: 'Employee', desc: 'Can submit leave, punch attendance, view salary & work tasks' },
@@ -34,8 +38,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
   const userId = route?.params?.userId;
   const { currentUser } = useAuth();
 
-  // Users are loaded from AsyncStorage (the single source of truth) —
-  // Redux no longer stores the user list.
+  // Users are loaded from the MySQL database via backend API.
   const [users, setUsers] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -45,7 +48,9 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
     ? users.filter((u) => u.companyId === currentUser.companyId)
     : users;
 
-  const existingUser = userId ? scopedUsers.find((u) => u.id === userId) : null;
+  const existingUser = userId
+    ? scopedUsers.find((u) => u.id === userId || u.email === userId)
+    : null;
   const isEditing = Boolean(existingUser);
 
   const [name, setName] = useState('');
@@ -65,40 +70,42 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
     });
   };
 
-  // Load the stored users once on mount; after loading, prefill the form
-  // fields when editing an existing user (or pick a default manager for a
-  // new one). AsyncStorage is async, so the fields start empty and are
-  // filled here.
+  // Load the company users from the MySQL database once on mount; after loading,
+  // prefill the form fields when editing an existing user (or pick a default
+  // manager for a new one).
   useEffect(() => {
     (async () => {
-      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-      const scoped = currentUser?.companyId
-        ? storedUsers.filter((u) => u.companyId === currentUser.companyId)
-        : storedUsers;
-      setUsers(scoped);
+      try {
+        const scoped = await fetchCompanyUsersApi(currentUser?.companyId);
+        const userList = Array.isArray(scoped) ? scoped : [];
+        setUsers(userList);
 
-      const existing = userId ? scoped.find((u) => u.id === userId) : null;
-      if (existing) {
-        setName(existing.name || '');
-        setEmail(existing.email || '');
-        setPassword(existing.password || 'password123');
-        setRole(existing.role || 'EMPLOYEE');
-        // Only keep a stored reporting manager if it actually points at a
-        // MANAGER; an old wrong assignment (e.g. an admin) is treated as
-        // unassigned so the "assign a manager" warning shows again.
-        const storedManager = scoped.find((u) => u.id === existing.managerId);
-        setSelectedManagerId(
-          storedManager && storedManager.role === 'MANAGER' ? existing.managerId : ''
-        );
-        setAvatarKey(existing.avatarKey || 'dpEmpAli');
-        setIsActive(existing.isActive !== false);
-      } else {
-        // New user: default to the first available manager of this company
-        setSelectedManagerId(scoped.find((u) => u.role === 'MANAGER')?.id || '');
+        const existing = userId
+          ? userList.find((u) => u.id === userId || u.email === userId)
+          : null;
+        if (existing) {
+          setName(existing.name || '');
+          setEmail(existing.email || '');
+          setPassword(existing.password || 'password123');
+          setRole(existing.role || 'EMPLOYEE');
+          const managerTarget = existing.managerId || existing.managerEmail;
+          const storedManager = userList.find(
+            (u) => (u.id === managerTarget || u.email === managerTarget) && u.role === 'MANAGER'
+          );
+          setSelectedManagerId(storedManager ? storedManager.id : '');
+          setAvatarKey(existing.avatarKey || 'dpEmpAli');
+          setIsActive(existing.isActive !== false);
+        } else {
+          // New user: default to the first available manager of this company
+          setSelectedManagerId(userList.find((u) => u.role === 'MANAGER')?.id || '');
+        }
+      } catch (err) {
+        console.warn('[EmployeeForm] Failed loading company users from DB:', err);
+      } finally {
+        setIsLoaded(true);
       }
-      setIsLoaded(true);
     })();
-  }, []);
+  }, [currentUser?.companyId, userId]);
 
   // Available managers list (from the loaded, company-scoped users).
   // Employees may only be assigned to a MANAGER — never to an admin.
@@ -118,66 +125,37 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-
-    // Every account type (ADMIN, MANAGER, HR, EMPLOYEE, CLIENT) lives in the same
-    // AsyncStorage user list and logs in with the same lookup, so one email may
-    // only ever belong to ONE user. We re-read the FULL stored list here (not the
-    // company-scoped subset shown in the directory) so a duplicate is caught even
-    // when it belongs to another role, another company, or the super admin's own
-    // Company Admin accounts. On edit we skip our own record so saving an
-    // unchanged email still works.
-    const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-    const emailTaken = (Array.isArray(storedUsers) ? storedUsers : []).some(
-      (u) => (u.email || '').toLowerCase() === normalizedEmail && u.id !== existingUser?.id
-    );
-    if (emailTaken) {
-      Alert.alert(
-        'Validation Error',
-        `The email "${normalizedEmail}" is already registered to another user. Each user must have a unique email address.`
-      );
-      return;
-    }
-
     const mgrObj = scopedUsers.find((u) => u.id === selectedManagerId && u.role === 'MANAGER');
 
     // Users are typed by ROLE only (no departments in the system).
     const userPayload = {
-      id: existingUser?.id || `EMP-${Math.floor(100 + Math.random() * 900)}`,
+      companyId: currentUser?.companyId,
       name: name.trim(),
       email: normalizedEmail,
       password,
       role,
-      managerId: role === 'EMPLOYEE' ? selectedManagerId : null,
+      managerId: role === 'EMPLOYEE' && mgrObj ? mgrObj.email : null,
+      managerEmail: role === 'EMPLOYEE' && mgrObj ? mgrObj.email : null,
       reportsTo: role === 'EMPLOYEE' && mgrObj ? mgrObj.name : null,
       avatarKey,
       isActive,
       title: existingUser?.title || `${role} Specialist`,
     };
 
-    // Only tag NEW users with the admin's company (on edit we must not
-    // touch companyId, otherwise an existing company tag would be wiped).
-    if (!isEditing && currentUser?.companyId) {
-      userPayload.companyId = currentUser.companyId;
-    }
-
-    // Persist to AsyncStorage — the single source of truth for users.
     try {
-      const updatedUsers = isEditing
-        ? storedUsers.map((u) => (u.id === userPayload.id ? { ...u, ...userPayload } : u))
-        : [userPayload, ...storedUsers];
-      await storageService.setItem(STORAGE_KEYS.USERS, updatedUsers);
+      if (isEditing) {
+        await updateCompanyUserApi(existingUser.email, userPayload);
+        Alert.alert('Success', `User record for "${name}" updated successfully.`, [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      } else {
+        await createCompanyUserApi(userPayload);
+        Alert.alert('User Provisioned', `New user "${name}" created and provisioned.`, [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      }
     } catch (err) {
-      console.warn('[EmployeeForm] Failed persisting user to storage:', err);
-    }
-
-    if (isEditing) {
-      Alert.alert('Success', `User record for "${name}" updated successfully.`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-    } else {
-      Alert.alert('User Provisioned', `New user "${name}" created and provisioned.`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      Alert.alert('Validation Error', err.message || 'Failed to save user record to database.');
     }
   };
 

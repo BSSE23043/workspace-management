@@ -338,6 +338,18 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
 
 ## Changelog (append every change/pull/merge on `Umar`)
 
+- **2026-11-15** — **MySQL Backend Integration for Auth, Super Admin, and Company Admin + Admin Portal Fixes.**
+  - **Backend (`workspaceManagement_backend/`):**
+    - Configured Express server (`server.js`), `.env`, and `mysql2/promise` connection pool (`src/config/db.js`) targeting `wms_schema.sql` (`companies` and `users` tables).
+    - `src/controllers/authController.js` & `src/routes/authRoutes.js`: `POST /api/auth/login` (checks hardcoded Super Admin or queries MySQL `users` joined with `companies` and manager info) and `PUT /api/auth/profile` (updates name, email, phone, avatarKey in `users`).
+    - `src/controllers/superAdminController.js` & `src/routes/superAdminRoutes.js`: `GET /api/super-admin/stats`, `GET /api/super-admin/admins`, `POST /api/super-admin/admins` (transactional creation of `companies` + `ADMIN` row in `users`), and `DELETE /api/super-admin/admins/:email`.
+    - `src/controllers/adminController.js` & `src/routes/adminRoutes.js`: `GET /api/admin/company/:companyId`, `PUT /api/admin/company/:companyId` (updates company profile, single Main Campus geofence coordinates/radius, and payroll deduction rates), `GET /api/admin/users`, `POST /api/admin/users`, `PUT /api/admin/users/:email`, and `PATCH /api/admin/users/:email/status`.
+  - **Frontend Services & Screens (`workspaceManagement_frontend/`):**
+    - Added `src/services/api.js` HTTP client for Auth, Super Admin, and Company Admin endpoints.
+    - Updated `AuthContext.js`, `SuperAdminDashboardScreen.js`, `CompanyAdminsScreen.js`, `companyService.js`, `AdminDashboardScreen.js`, `CompanyProfileScreen.js`, `EmployeeDirectoryScreen.js`, and `EmployeeFormScreen.js` to persist and read from the MySQL backend instead of `AsyncStorage`.
+    - Fixed Admin role bug in `EmployeeFormScreen.js` and `EmployeeDirectoryScreen.js`: Company Admins can no longer create another `ADMIN` user (only `EMPLOYEE`, `MANAGER`, `HR`, `CLIENT`).
+    - Simplified geofence configuration in `CompanyProfileScreen.js`: removed multi-campus presets (`CAMPUS_PRESETS`) and standardized on a single **Main Campus** (`mainCampus`, `officeLatitude`, `officeLongitude`, `geofenceRadiusMeters`).
+
 - **2026-10-23** — **Removed the `HeaderBar` status-pill feature and other dead code.**
   - `components/common/HeaderBar.js`: deleted the `React.createElement` status pill plus the
     `statusText` / `statusColor` / `showStatus` props and the `statusPill` / `statusDot` / `statusText`
