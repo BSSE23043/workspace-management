@@ -11,7 +11,10 @@ import {
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
-import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import {
+  fetchCompanyUsersApi,
+  toggleCompanyUserStatusApi,
+} from '../../services/api';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppButton from '../../components/common/AppButton';
 import ChipButton from '../../components/common/ChipButton';
@@ -35,8 +38,7 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
 
   const { currentUser } = useAuth();
 
-  // Users are loaded from AsyncStorage (the single source of truth) into
-  // local state — Redux no longer stores the user list.
+  // Users are loaded from the MySQL backend database into local state
   const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState('ALL');
@@ -44,45 +46,47 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadUsers = useCallback(async () => {
-    const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-    // Company admins created by the Super Admin carry a companyId; they only
-    // see users of their own company. Everyone else sees the full list.
-    const scopedUsers = currentUser?.companyId
-      ? storedUsers.filter((u) => u.companyId === currentUser.companyId)
-      : storedUsers;
-    setUsers(scopedUsers);
-  }, [currentUser]);
+    if (!currentUser?.companyId) {
+      setUsers([]);
+      return;
+    }
+    try {
+      const companyUsers = await fetchCompanyUsersApi(currentUser.companyId);
+      setUsers(companyUsers.filter((u) => u.role !== 'ADMIN'));
+    } catch (err) {
+      console.warn('[EmployeeDirectory] Failed loading users from DB:', err);
+    }
+  }, [currentUser?.companyId]);
 
   // Load on mount + reload whenever the screen regains focus
-  // (e.g. after adding a user in the Employee Form).
   useEffect(() => {
     loadUsers();
     const unsubscribe = navigation.addListener('focus', loadUsers);
     return unsubscribe;
-  }, [loadUsers]);
+  }, [loadUsers, navigation]);
 
-  // Pull to refresh handler — now actually reloads users from storage
+  // Pull to refresh handler — reloads users from the database
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadUsers();
     setRefreshing(false);
   }, [loadUsers]);
 
-  // Toggle active flag and persist the change to AsyncStorage
-  const handleToggleActive = useCallback(
-    async (userId) => {
-      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-      const updatedUsers = storedUsers.map((u) =>
-        u.id === userId ? { ...u, isActive: u.isActive === false } : u
+  // Toggle active flag and persist the change to the MySQL database
+  const handleToggleActive = useCallback(async (userEmail, currentStatus) => {
+    try {
+      const nextStatus = currentStatus === false;
+      const updatedUser = await toggleCompanyUserStatusApi(
+        userEmail,
+        nextStatus
       );
-      await storageService.setItem(STORAGE_KEYS.USERS, updatedUsers);
-      // Mirror the same flip in the local (scoped) list
       setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, isActive: u.isActive === false } : u))
+        prev.map((u) => (u.email === userEmail ? updatedUser : u))
       );
-    },
-    []
-  );
+    } catch (err) {
+      console.warn('[EmployeeDirectory] Failed toggling user status:', err);
+    }
+  }, []);
 
   // Filter and group users into SectionList sections
   const sections = useMemo(() => {
@@ -162,7 +166,7 @@ export const EmployeeDirectoryScreen = ({ navigation }) => {
             </Text>
             <Switch
               value={isActive}
-              onValueChange={() => handleToggleActive(item.id)}
+              onValueChange={() => handleToggleActive(item.email, item.isActive)}
               trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
               thumbColor={isActive ? '#16A34A' : '#94A3B8'}
             />

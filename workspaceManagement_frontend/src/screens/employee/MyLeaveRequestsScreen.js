@@ -1,55 +1,79 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
   Alert,
 } from 'react-native';
-import { loadLeaves, applyLeave } from '../../services/leaveService';
+import { fetchMyLeaves, submitLeaveRequest } from '../../services/leaveApi';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import AppButton from '../../components/common/AppButton';
-import ChipButton from '../../components/common/ChipButton';
 import Icon from '../../components/common/Icon';
 import DatePickerModal from '../../components/common/DatePickerModal';
 import { validateLeaveDates } from '../../utils/validation';
 
-const LEAVE_TYPES = [
-  { id: 'Annual Leave', label: 'Annual Leave' },
-  { id: 'Sick Leave', label: 'Sick Leave' },
-];
+const toDateInput = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDefaultStartDate = () => toDateInput(new Date());
+
+const getDefaultEndDate = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return toDateInput(tomorrow);
+};
 
 export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
   const { currentUser } = useAuth();
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  // Leaves are NOT in Redux anymore — read them from AsyncStorage on mount
-  // and refresh on focus so my history always matches the stored state.
+  // Leave requests are stored in the backend database now. The list is fetched
+  // for the logged-in employee on mount and again on focus so it stays fresh.
   const [leaves, setLeaves] = useState([]);
-  useEffect(() => {
-    const load = async () => {
-      setLeaves(await loadLeaves());
-    };
-    load();
-    const unsubscribe = navigation.addListener('focus', load);
-    return () => unsubscribe();
-  }, [navigation]);
-  const myLeaves = leaves.filter((l) => l.userId === currentUser?.id);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
-  const [selectedType, setSelectedType] = useState('Annual Leave');
-  const [startDate, setStartDate] = useState('2026-10-20');
-  const [endDate, setEndDate] = useState('2026-10-21');
+  const loadMyLeaves = useCallback(async () => {
+    if (!currentUser?.email) {
+      setLeaves([]);
+      setIsLoading(false);
+      return;
+    }
+    try {
+      setLoadError(null);
+      const data = await fetchMyLeaves(currentUser.email);
+      setLeaves(data);
+    } catch (error) {
+      setLoadError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser?.email]);
+
+  useEffect(() => {
+    loadMyLeaves();
+    const unsubscribe = navigation.addListener('focus', loadMyLeaves);
+    return () => unsubscribe();
+  }, [navigation, loadMyLeaves]);
+
+  const [startDate, setStartDate] = useState(getDefaultStartDate);
+  const [endDate, setEndDate] = useState(getDefaultEndDate);
   const [calendarField, setCalendarField] = useState(null); // 'start' | 'end' | null
-  const [reason, setReason] = useState('Family emergency requiring travel to hometown...');
+  const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
   // Validate dates with pure validation function checking overlaps
-  const dateValidation = validateLeaveDates(startDate, endDate, myLeaves);
+  const dateValidation = validateLeaveDates(startDate, endDate, leaves);
 
   const handleSubmit = async () => {
     setSubmitted(true);
@@ -60,28 +84,41 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
       Alert.alert('Validation Error', 'Please enter a reason for your leave request.');
       return;
     }
+    if (!currentUser?.email) {
+      Alert.alert('Validation Error', 'No active employee session was found.');
+      return;
+    }
 
     const start = new Date(startDate);
     const end = new Date(endDate);
     const daysCount = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
 
-    // Saves the new PENDING request straight to AsyncStorage and returns the
-    // updated list — the "My Submitted Requests" section refreshes from it.
-    const next = await applyLeave({
-      userId: currentUser?.id || '',
-      userName: currentUser?.name || '',
-      type: selectedType,
-      startDate,
-      endDate,
-      daysCount,
-      reason: reason.trim(),
-    });
-    setLeaves(next);
+    // Submits the new PENDING request to the backend and refreshes the list
+    // from the database so "My Submitted Requests" reflects the saved row.
+    setIsSubmitting(true);
+    try {
+      await submitLeaveRequest({
+        userEmail: currentUser.email,
+        startDate,
+        endDate,
+        reason: reason.trim(),
+      });
+      await loadMyLeaves();
+      setReason('');
+      setSubmitted(false);
 
-    Alert.alert(
-      'Leave Request Submitted',
-      `Your request for ${daysCount} working days has been forwarded to your reporting manager for review.`
-    );
+      Alert.alert(
+        'Leave Request Submitted',
+        `Your request for ${daysCount} working days has been forwarded to your reporting manager for review.`
+      );
+    } catch (error) {
+      Alert.alert(
+        'Submission Failed',
+        error.message || 'Could not submit your leave request. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -101,24 +138,6 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
           <Text style={[styles.cardSubtitle, { color: palette.textSecondary }]}>
             Requests are verified against sprint commitments &amp; team availability
           </Text>
-
-          {/* Leave Type Selector Chips */}
-          <Text style={[styles.label, { color: palette.textPrimary }]}>Select Leave Type</Text>
-          <View style={styles.typesRow}>
-            {LEAVE_TYPES.map((t) => {
-              const isSelected = selectedType === t.id;
-              return (
-                <ChipButton
-                  key={t.id}
-                  label={t.label}
-                  selected={isSelected}
-                  style={{ paddingHorizontal: 12, paddingVertical: 9 }}
-                  textStyle={{ color: isSelected ? '#FFFFFF' : palette.textPrimary }}
-                  onPress={() => setSelectedType(t.id)}
-                />
-              );
-            })}
-          </View>
 
           {/* Start & End Dates with Interactive Calendar */}
           <View style={styles.datesRow}>
@@ -205,6 +224,7 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
             variant="primary"
             size="md"
             fullWidth
+            loading={isSubmitting}
             style={{ marginTop: 4, paddingVertical: 12 }}
             onPress={handleSubmit}
           />
@@ -214,14 +234,25 @@ export const MyLeaveRequestsScreen = ({ navigation, isEmbedded = false }) => {
         <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
           My Submitted Requests
         </Text>
-        {myLeaves.map((req) => (
+        {isLoading && (
+          <Text style={[styles.historyMessage, { color: palette.textSecondary }]}>Loading your leave requests...</Text>
+        )}
+        {!isLoading && loadError && (
+          <Text style={styles.errorText}>{loadError}</Text>
+        )}
+        {!isLoading && !loadError && leaves.length === 0 && (
+          <Text style={[styles.historyMessage, { color: palette.textSecondary }]}>
+            You have not submitted any leave requests yet.
+          </Text>
+        )}
+        {leaves.map((req) => (
           <View
             key={req.id}
             style={[styles.historyCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
           >
             <View style={styles.historyTopRow}>
               <View>
-                <Text style={[styles.reqType, { color: palette.textPrimary }]}>{req.type}</Text>
+                <Text style={[styles.reqType, { color: palette.textPrimary }]}>Leave Request</Text>
                 <Text style={[styles.reqDates, { color: palette.textSecondary }]}>
                   {req.startDate} → {req.endDate} ({req.daysCount} Working Days)
                 </Text>
@@ -292,15 +323,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 12,
   },
-  label: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  typesRow: {
-    gap: 8,
-    marginBottom: 12,
-  },
   datesRow: {
     flexDirection: 'row',
     marginBottom: 12,
@@ -334,6 +356,10 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 14,
     fontWeight: '700',
+    marginBottom: 10,
+  },
+  historyMessage: {
+    fontSize: 12,
     marginBottom: 10,
   },
   historyCard: {

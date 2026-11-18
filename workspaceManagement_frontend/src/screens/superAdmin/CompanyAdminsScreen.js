@@ -6,9 +6,9 @@
 //      Password) — e.g. when a new company subscribes to WMS.
 //   2. REMOVE an existing Company Admin account.
 //
-// Company Admin accounts are stored in AsyncStorage under STORAGE_KEYS.USERS
-// with role = 'ADMIN' (the user database has no demo users anymore). That way
-// the normal Login flow picks them up automatically (no extra login code needed).
+// Company Admin accounts are stored in MySQL (a companies row plus a users row
+// with role = 'ADMIN') through services/api.js. The normal Login flow reads them
+// from the backend, so no extra login code is needed.
 // ============================================================================
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -21,7 +21,11 @@ import {
   Platform,
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
-import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import {
+  fetchCompanyAdmins,
+  createCompanyAdminApi,
+  deleteCompanyAdminApi,
+} from '../../services/api';
 import { isValidEmail, isValidPassword } from '../../utils/validation';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
@@ -39,19 +43,21 @@ export const CompanyAdminsScreen = ({ navigation }) => {
   const [adminPassword, setAdminPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  // List state: all Company Admin accounts loaded from AsyncStorage
+  // List state: all Company Admin accounts loaded from the MySQL backend
   const [admins, setAdmins] = useState([]);
 
   // Syllabus requirement: useRef focus chaining (name -> email -> password)
   const emailInputRef = useRef(null);
   const passwordInputRef = useRef(null);
 
-  // Reload the admin list from AsyncStorage (used on mount and after changes)
+  // Reload the admin list from the backend database (used on mount and after changes)
   const loadAdmins = async () => {
-    const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-    // Company Admins are every stored user with role ADMIN
-    const adminUsers = storedUsers.filter((u) => u.role === 'ADMIN');
-    setAdmins(adminUsers);
+    try {
+      const adminUsers = await fetchCompanyAdmins();
+      setAdmins(adminUsers);
+    } catch (err) {
+      console.warn('[CompanyAdmins] Failed loading admins from DB:', err);
+    }
   };
 
   // Load the list once when the screen mounts
@@ -83,55 +89,31 @@ export const CompanyAdminsScreen = ({ navigation }) => {
       return;
     }
 
-    const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
+    try {
+      const res = await createCompanyAdminApi({
+        companyName: companyName.trim(),
+        adminName: adminName.trim(),
+        email: adminEmail.toLowerCase().trim(),
+        password: adminPassword,
+      });
 
-    // Check that no account (of any role) already uses this email
-    const existingUser = storedUsers.find(
-      (u) => u.email.toLowerCase() === adminEmail.toLowerCase().trim()
-    );
-    if (existingUser) {
-      setErrorMessage('An account with this email already exists');
-      return;
+      const newAdmin = res.admin;
+
+      // Clear the form and refresh the visible list
+      setCompanyName('');
+      setAdminName('');
+      setAdminEmail('');
+      setAdminPassword('');
+      loadAdmins();
+
+      Alert.alert(
+        'Company Admin Created',
+        `${newAdmin.name} can now log in with:\n${newAdmin.email}\n${adminPassword}`,
+        [{ text: 'OK' }]
+      );
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to create Company Admin');
     }
-
-    // Build the new Company Admin user object.
-    // The companyId is a unique scope key for this company: every user this
-    // admin later creates will carry the same companyId, so their portal
-    // never shows users belonging to another company (or the demo seeds).
-    const randomSuffix = Math.floor(100 + Math.random() * 900);
-    const newAdmin = {
-      id: `ADM-${randomSuffix}`,
-      companyId: `CO-${randomSuffix}`,
-      name: adminName.trim(),
-      email: adminEmail.toLowerCase().trim(),
-      password: adminPassword,
-        role: 'ADMIN',
-        title: 'Company Administrator',
-      companyName: companyName.trim(),
-      location: 'HQ - Main Office',
-      phone: '+92 300 0000000',
-      avatarKey: 'dpAdminUsman',
-      isActive: true,
-      reportsTo: null,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Save the updated users list back to AsyncStorage
-    const updatedUsers = [newAdmin, ...storedUsers];
-    await storageService.setItem(STORAGE_KEYS.USERS, updatedUsers);
-
-    // Clear the form and refresh the visible list
-    setCompanyName('');
-    setAdminName('');
-    setAdminEmail('');
-    setAdminPassword('');
-    loadAdmins();
-
-    Alert.alert(
-      'Company Admin Created',
-      `${newAdmin.name} can now log in with:\n${newAdmin.email}\n${newAdmin.password}`,
-      [{ text: 'OK' }]
-    );
   };
 
   // ------------------------------------------------------------------
@@ -147,11 +129,15 @@ export const CompanyAdminsScreen = ({ navigation }) => {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-            // Keep everyone except the removed admin (immutability: filter creates a new array)
-            const updatedUsers = storedUsers.filter((u) => u.id !== admin.id);
-            await storageService.setItem(STORAGE_KEYS.USERS, updatedUsers);
-            loadAdmins();
+            try {
+              await deleteCompanyAdminApi(admin.email);
+              loadAdmins();
+            } catch (err) {
+              Alert.alert(
+                'Remove Failed',
+                err.message || 'Could not remove Company Admin.'
+              );
+            }
           },
         },
       ]

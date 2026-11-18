@@ -23,8 +23,8 @@ export const SEED_COMPANY = {
 // The user database starts EMPTY and users are typed by ROLE only
 // (EMPLOYEE / MANAGER / HR / ADMIN / CLIENT). Real accounts only come from:
 //   1. The hardcoded Super Admin (see utils/superAdminConfig.js, not stored here)
-//   2. Company Admins created by the Super Admin (AsyncStorage USERS, role ADMIN)
-//   3. Users those Company Admins create from the Employee Form
+//   2. Company Admins created by the Super Admin (MySQL users + companies, role ADMIN)
+//   3. Users those Company Admins create from the Employee Form (MySQL)
 // Every real user carries a companyId (company scope key, "CO-###").
 // ---------------------------------------------------------------------------
 
@@ -34,7 +34,7 @@ export const SEED_COMPANY = {
 // EMPTY and are built up at runtime by real users:
 //   - employees punch attendance (services/attendanceService.checkIn / checkOut)
 //   - employees submit leave (services/leaveService.applyLeave)
-//   - managers create tasks (services/taskService.createTask)
+//   - managers create tasks (services/taskApi.createTask)
 //   - managers create client requirements (services/requirementService.addRequirement)
 // This removes all pre-filled demo data associated with the demo manager.
 // ---------------------------------------------------------------------------

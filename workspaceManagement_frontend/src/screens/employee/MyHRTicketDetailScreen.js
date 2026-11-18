@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,9 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
-import { loadTickets, addTicketMessage } from '../../services/ticketService';
+import { fetchMyTickets, sendTicketMessage } from '../../services/ticketApi';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
@@ -27,36 +28,61 @@ export const MyHRTicketDetailScreen = ({ navigation, route }) => {
 
   const ticketId = route?.params?.ticketId;
 
-  // Tickets are loaded from AsyncStorage on demand (mount + focus), so the
-  // thread always shows what was last stored — including HR's replies.
+  // Tickets are fetched from the backend on mount and focus, so the thread
+  // always reflects the latest messages (including HR replies).
   const [tickets, setTickets] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-  useEffect(() => {
-    const load = async () => {
-      setTickets(await loadTickets());
+
+  const loadMyTickets = useCallback(async () => {
+    if (!currentUser?.email) {
+      setTickets([]);
       setIsDataLoaded(true);
-    };
-    load();
-    const unsubscribe = navigation.addListener('focus', load);
+      return;
+    }
+    try {
+      const data = await fetchMyTickets(currentUser.email);
+      setTickets(data);
+    } catch (error) {
+      Alert.alert('Could not load ticket', error.message);
+    } finally {
+      setIsDataLoaded(true);
+    }
+  }, [currentUser?.email]);
+
+  useEffect(() => {
+    loadMyTickets();
+    const unsubscribe = navigation.addListener('focus', loadMyTickets);
     return () => unsubscribe();
-  }, [navigation]);
+  }, [navigation, loadMyTickets]);
 
   const ticket = tickets.find((t) => t.id === ticketId);
 
   const [replyText, setReplyText] = useState('');
+  const [isSending, setIsSending] = useState(false);
 
-  // Employee posts onto the same timeline the HR detail screen renders, so
-  // both sides always see one shared discussion. addTicketMessage saves the
-  // updated list straight to AsyncStorage.
+  // Saves the reply to the backend and refreshes the thread so the new
+  // message and any HR updates appear together.
   const handleSendReply = async () => {
-    if (!replyText.trim() || !ticket) return;
-    const next = await addTicketMessage({
-      ticketId: ticket.id,
-      sender: `${currentUser?.name || 'Employee'} (Employee)`,
-      message: replyText.trim(),
-    });
-    setTickets(next);
-    setReplyText('');
+    if (!replyText.trim() || !ticket || isSending) return;
+    if (!currentUser?.email) {
+      Alert.alert('Error', 'No active employee session was found.');
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      await sendTicketMessage({
+        ticketId: ticket.id,
+        userEmail: currentUser.email,
+        message: replyText.trim(),
+      });
+      setReplyText('');
+      await loadMyTickets();
+    } catch (error) {
+      Alert.alert('Could not send reply', error.message);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   if (!isDataLoaded) {
@@ -169,6 +195,7 @@ export const MyHRTicketDetailScreen = ({ navigation, route }) => {
                 title="Send"
                 variant="primary"
                 size="sm"
+                loading={isSending}
                 style={{ paddingHorizontal: 14, borderRadius: 8 }}
                 onPress={handleSendReply}
               />

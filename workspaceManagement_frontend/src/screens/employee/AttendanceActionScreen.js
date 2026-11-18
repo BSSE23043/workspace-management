@@ -1,4 +1,4 @@
-import React, { useReducer, useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useReducer, useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,11 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { checkIn, checkOut, loadAttendance } from '../../services/attendanceService';
+import {
+  fetchAttendanceStatus,
+  checkInToShift,
+  checkOutOfShift,
+} from '../../services/attendanceApi';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
@@ -15,11 +19,28 @@ import AppButton from '../../components/common/AppButton';
 import ChipButton from '../../components/common/ChipButton';
 import Icon from '../../components/common/Icon';
 import { IMAGES } from '../../assets/images';
-import { calculateHaversineDistance, isWithinGeofence } from '../../utils/geofence';
+import { calculateHaversineDistance } from '../../utils/geofence';
 
 // Syllabus Requirement: useReducer for GPS telemetry and check-in state
 const gpsReducer = (state, action) => {
   switch (action.type) {
+    case 'SET_GEOFENCE': {
+      const { officeLat, officeLon, allowedRadius } = action.payload;
+      const distance = calculateHaversineDistance(
+        state.userLat,
+        state.userLon,
+        officeLat,
+        officeLon
+      );
+      return {
+        ...state,
+        officeLat,
+        officeLon,
+        allowedRadius,
+        distance,
+        isInside: distance <= allowedRadius,
+      };
+    }
     case 'SET_TEST_MODE': {
       const isInside = action.payload === 'INSIDE';
       const userLat = isInside ? 31.52042 : 31.5245;
@@ -77,57 +98,110 @@ export const AttendanceActionScreen = ({ navigation }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  // Punch logs are NOT in Redux anymore — read them from AsyncStorage on mount
-  // and refresh on focus so today's record and the history stay accurate.
-  const [logs, setLogs] = useState([]);
-  useEffect(() => {
-    const load = async () => {
-      setLogs(await loadAttendance());
-    };
-    load();
-    const unsubscribe = navigation.addListener('focus', load);
-    return () => unsubscribe();
-  }, [navigation]);
-
   // useReducer hook for GPS telemetry
   const [gpsState, dispatch] = useReducer(gpsReducer, initialGPSState);
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayRecord = logs.find(
-    (l) => l.userId === currentUser?.id && l.date === todayStr
-  );
-  const isCheckedIn = Boolean(todayRecord && todayRecord.status === 'PRESENT');
+  // Punch status is NOT in Redux anymore — it comes from MySQL (company
+  // geofence, shift window and today's punches) and refreshes on focus.
+  const [status, setStatus] = useState(null);
+  const [isStatusLoading, setIsStatusLoading] = useState(true);
+  const [statusError, setStatusError] = useState('');
+  const [isPunching, setIsPunching] = useState(false);
 
-  // This user's own punch history (newest first — new logs are unshifted), max 5 shown
-  const myRecentLogs = logs.filter((l) => l.userId === currentUser?.id).slice(0, 5);
+  const loadStatus = useCallback(async () => {
+    const email = currentUser?.email;
+    if (!email) {
+      setIsStatusLoading(false);
+      return;
+    }
+
+    setIsStatusLoading(true);
+    setStatusError('');
+    try {
+      const data = await fetchAttendanceStatus(email);
+      setStatus(data);
+
+      if (data?.company?.geofenceLat != null && data?.company?.geofenceLng != null) {
+        dispatch({
+          type: 'SET_GEOFENCE',
+          payload: {
+            officeLat: Number(data.company.geofenceLat),
+            officeLon: Number(data.company.geofenceLng),
+            allowedRadius: Number(data.company.geofenceRadiusM) || 200,
+          },
+        });
+      }
+    } catch (error) {
+      setStatusError(error.message || 'Unable to load attendance status.');
+    } finally {
+      setIsStatusLoading(false);
+    }
+  }, [currentUser?.email]);
+
+  useEffect(() => {
+    loadStatus();
+    const unsubscribe = navigation.addListener('focus', loadStatus);
+    return () => unsubscribe();
+  }, [navigation, loadStatus]);
+
+  const todayRecord = status?.today || null;
+  const isCheckedIn = Boolean(todayRecord?.checkInTime);
+  const isCompleted = Boolean(todayRecord?.checkInTime && todayRecord?.checkOutTime);
+
+  // This user's own punch history (backend already filters by user, newest first)
+  const myRecentLogs = (status?.logs || []).slice(0, 5);
+
+  const insideDistance = calculateHaversineDistance(
+    31.52042,
+    74.35881,
+    gpsState.officeLat,
+    gpsState.officeLon
+  );
+  const outsideDistance = calculateHaversineDistance(
+    31.5245,
+    74.3635,
+    gpsState.officeLat,
+    gpsState.officeLon
+  );
 
   const handleToggleShiftPunch = async () => {
     if (!gpsState.isInside) {
       Alert.alert(
         'Punch Blocked (Out of Bounds)',
-        `Your calculated distance is ${gpsState.distance}m, exceeding the 200m Lahore Campus geofence perimeter. Check-in/out is disabled.`,
+        `Your calculated distance is ${gpsState.distance}m, exceeding the ${gpsState.allowedRadius}m company geofence perimeter. Check-in/out is disabled.`,
         [{ text: 'OK' }]
       );
       return;
     }
 
-    // Each punch saves to AsyncStorage and returns the updated list, which the
-    // recent-punches section below renders from.
-    if (isCheckedIn) {
-      const next = await checkOut({ userId: currentUser?.id || '' });
-      setLogs(next);
-      Alert.alert('Check-Out Confirmed', 'You have successfully punched out of your current shift.');
-    } else {
-      const next = await checkIn({
-        userId: currentUser?.id || '',
-        userName: currentUser?.name || '',
-        distanceMeters: gpsState.distance,
-        isGeofenceVerified: true,
-        terminal: gpsState.terminal,
-        bssid: gpsState.bssid,
+    const email = currentUser?.email;
+    if (!email) {
+      Alert.alert('Punch Failed', 'Your account is missing an email address.');
+      return;
+    }
+
+    setIsPunching(true);
+    try {
+      const punch = isCheckedIn ? checkOutOfShift : checkInToShift;
+      const data = await punch({
+        userEmail: email,
+        latitude: gpsState.userLat,
+        longitude: gpsState.userLon,
       });
-      setLogs(next);
-      Alert.alert('Check-In Confirmed', 'You have successfully punched in within the 200m geofence.');
+      setStatus(data);
+      Alert.alert(
+        isCheckedIn ? 'Check-Out Confirmed' : 'Check-In Confirmed',
+        isCheckedIn
+          ? 'You have successfully punched out of your current shift.'
+          : `You have successfully punched in within the ${gpsState.allowedRadius}m geofence.`
+      );
+    } catch (error) {
+      Alert.alert(
+        isCheckedIn ? 'Check-Out Failed' : 'Check-In Failed',
+        error.message || 'Unable to record attendance right now.'
+      );
+    } finally {
+      setIsPunching(false);
     }
   };
 
@@ -141,14 +215,14 @@ export const AttendanceActionScreen = ({ navigation }) => {
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Map Container with dashed 200m circle overlay and location pin */}
+        {/* Map Container with dashed geofence circle overlay and location pin */}
         <View style={styles.mapCard}>
           <Image
             source={IMAGES.mapLahoreCampus}
             style={styles.mapImage}
             resizeMode="cover"
           />
-          {/* Dashed 200m circle */}
+          {/* Dashed geofence circle */}
           <View style={styles.dashedCircle} />
 
           {/* User Location Pin */}
@@ -169,7 +243,7 @@ export const AttendanceActionScreen = ({ navigation }) => {
           </Text>
           <View style={styles.simButtonsRow}>
             <ChipButton
-              label="Inside 200m (14.2m)"
+              label={`Inside ${gpsState.allowedRadius}m (${insideDistance}m)`}
               variant="segment"
               selected={gpsState.simulatedMode === 'INSIDE'}
               activeColor="#16A34A"
@@ -188,7 +262,7 @@ export const AttendanceActionScreen = ({ navigation }) => {
             />
 
             <ChipButton
-              label="Outside 200m (520m - Blocked)"
+              label={`Outside ${gpsState.allowedRadius}m (${outsideDistance}m - Blocked)`}
               variant="segment"
               selected={gpsState.simulatedMode === 'OUTSIDE'}
               activeColor="#DC2626"
@@ -224,7 +298,7 @@ export const AttendanceActionScreen = ({ navigation }) => {
               />
               <Text style={[styles.geoTitle, { color: gpsState.isInside ? '#16A34A' : '#DC2626' }]}>
                 {gpsState.isInside
-                  ? 'Geofence Perimeter Validated • Within 200m Limit'
+                  ? `Geofence Perimeter Validated • Within ${gpsState.allowedRadius}m Limit`
                   : 'Geofence Validation Failed • Outside Perimeter'}
               </Text>
             </View>
@@ -252,18 +326,62 @@ export const AttendanceActionScreen = ({ navigation }) => {
           </View>
         </View>
 
+        {/* Shift Window & Today's Punches */}
+        <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
+          <View style={styles.shiftRow}>
+            <Icon name="time" size={16} color={palette.primary} />
+            <Text style={[styles.shiftText, { color: palette.textPrimary }]}>
+              Shift Window:{' '}
+              {status?.schedule
+                ? `${status.schedule.startTime} – ${status.schedule.endTime}`
+                : status
+                  ? 'Not configured'
+                  : '—'}
+            </Text>
+          </View>
+
+          {isStatusLoading && !status ? (
+            <Text style={[styles.logSub, { marginTop: 6 }]}>Syncing attendance…</Text>
+          ) : (
+            <Text style={[styles.logSub, { marginTop: 6 }]}>
+              {todayRecord
+                ? `Today: In ${todayRecord.checkInTime || '—'} • Out ${todayRecord.checkOutTime || '—'}`
+                : 'No punch recorded today.'}
+            </Text>
+          )}
+
+          {statusError ? (
+            <>
+              <Text style={[styles.errorText, { marginTop: 8 }]}>{statusError}</Text>
+              <AppButton
+                title="Retry"
+                variant="secondary"
+                size="md"
+                icon="refresh"
+                fullWidth
+                style={{ marginTop: 10 }}
+                onPress={loadStatus}
+              />
+            </>
+          ) : null}
+        </View>
+
         {/* Primary Punch Action Button */}
         <AppButton
-          title={isCheckedIn ? 'Check Out of Current Shift' : 'Check In to Current Shift'}
-          variant={isCheckedIn ? 'danger' : 'primary'}
+          title={
+            isCompleted
+              ? 'Attendance Completed for Today'
+              : isCheckedIn
+                ? 'Check Out of Current Shift'
+                : 'Check In to Current Shift'
+          }
+          variant={isCompleted ? 'soft' : isCheckedIn ? 'danger' : 'primary'}
           size="lg"
-          icon="time"
-          disabled={!gpsState.isInside}
+          icon={isCompleted ? 'checkmark-circle' : 'time'}
+          loading={isPunching}
+          disabled={isStatusLoading || Boolean(statusError) || isCompleted}
           fullWidth
-          style={{
-            marginBottom: 10,
-            ...(!gpsState.isInside ? { backgroundColor: '#94A3B8' } : null),
-          }}
+          style={{ marginBottom: 10 }}
           onPress={handleToggleShiftPunch}
         />
 
@@ -277,14 +395,15 @@ export const AttendanceActionScreen = ({ navigation }) => {
           style={{ marginBottom: 16 }}
           onPress={() => {
             dispatch({ type: 'FORCE_REFRESH' });
+            loadStatus();
             Alert.alert(
               'Location Updated',
-              'Your GPS location has been refreshed successfully! Verified inside campus zone (Accuracy: ±5m).'
+              'Your GPS location has been refreshed successfully (Accuracy: ±5m).'
             );
           }}
         />
 
-        {/* Recent Punch Logs — real punches from Redux */}
+        {/* Recent Punch Logs — real punches from the backend */}
         <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
           Recent Punch Logs
         </Text>
@@ -440,6 +559,15 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     marginTop: 1,
   },
+  shiftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shiftText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   sectionHeading: {
     fontSize: 13,
     fontWeight: '700',
@@ -458,6 +586,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
+  },
+  errorText: {
+    fontSize: 11,
+    color: '#DC2626',
+    fontWeight: '600',
   },
   logDivider: {
     height: 1,

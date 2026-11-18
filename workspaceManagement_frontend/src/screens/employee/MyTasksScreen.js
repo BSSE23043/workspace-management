@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import { loadTasks, updateTaskStatus, addTaskLog } from '../../services/taskService';
+import { loadTasks, updateTaskStatus, addTaskLog } from '../../services/taskApi';
 import { timeAgo } from '../../utils/timeAgo';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppButton from '../../components/common/AppButton';
@@ -33,29 +33,41 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
   const palette = getRolePalette('EMPLOYEE');
   const scrollViewRef = useRef(null);
 
-  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // Tasks now come from MySQL through the backend API. Read them on mount and
   // refresh on focus, so a status change saved here (or by the manager in
   // another screen) shows the latest data next time the employee looks.
   const [tasks, setTasks] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [loadError, setLoadError] = useState('');
   useEffect(() => {
     const load = async () => {
-      setTasks(await loadTasks());
-      setIsDataLoaded(true);
+      try {
+        setTasks(await loadTasks({ companyId: currentUser?.companyId }));
+        setLoadError('');
+      } catch (err) {
+        setLoadError(err.message || 'Could not load tasks from the database.');
+      } finally {
+        setIsDataLoaded(true);
+      }
     };
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
-  }, [navigation]);
+  }, [navigation, currentUser?.companyId]);
 
   const [selectedTab, setSelectedTab] = useState('ALL');
 
-  // Filter tasks to this employee (supports both assignedToId and multi-assignees assignedToIds)
-  const currentUserId = currentUser?.id || '';
+  // Filter tasks to this employee. Emails are the DB identity, and taskApi also
+  // maps them into assignedToIds, so check both shapes.
+  const currentUserEmail = String(currentUser?.email || '').toLowerCase();
   const myTasks = tasks.filter(
     (t) =>
-      t.assignedToId === currentUserId ||
-      (Array.isArray(t.assignedToIds) && t.assignedToIds.includes(currentUserId))
+      (t.assignedToEmails || []).some(
+        (value) => String(value).toLowerCase() === currentUserEmail
+      ) ||
+      (t.assignedToIds || []).some(
+        (value) => String(value).toLowerCase() === currentUserEmail
+      )
   );
 
   const [selectedTaskId, setSelectedTaskId] = useState(myTasks[0]?.id || '');
@@ -102,37 +114,49 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
     const pct = parseInt(progressPercent, 10);
     const validPct = isNaN(pct) ? task.progressPercent || 0 : Math.min(100, Math.max(0, pct));
 
-    // Writes the new status/progress to AsyncStorage and refreshes local state
-    // with the saved list (taskService hands it straight back).
-    const nextTasks = await updateTaskStatus({
-      taskId: task.id,
-      status: taskState,
-      progressPercent: validPct,
-      note: progressNote.trim() || `Progress recorded at ${validPct}%`,
-      author: currentUser?.name,
-    });
-    setTasks(nextTasks);
+    try {
+      // Persists status/progress to MySQL and refreshes local state with the
+      // saved list (taskApi returns the fresh list).
+      const nextTasks = await updateTaskStatus({
+        taskId: task.id,
+        status: taskState,
+        progressPercent: validPct,
+        note: progressNote.trim() || `Progress recorded at ${validPct}%`,
+        author: currentUser?.name,
+        authorEmail: currentUser?.email,
+        companyId: currentUser?.companyId,
+      });
+      setTasks(nextTasks);
 
-    Alert.alert(
-      'Progress Saved',
-      `Task ${task.code} updated to ${taskState.replace('_', ' ')} (${validPct}%). Manager notified.`
-    );
+      Alert.alert(
+        'Progress Saved',
+        `Task ${task.code} updated to ${taskState.replace('_', ' ')} (${validPct}%). Manager notified.`
+      );
+    } catch (err) {
+      Alert.alert('Task Database Error', err.message || 'Progress could not be saved.');
+    }
   };
 
   // Sends the employee's message onto the shared task timeline, so the
   // manager sees it on his "Chronological Progress Log" screen.
   const handleSendMessage = async () => {
     if (!messageText.trim() || !activeTask) return;
-    const nextTasks = await addTaskLog({
-      taskId: activeTask.id,
-      note: messageText.trim(),
-      author: currentUser?.name,
-    });
-    setTasks(nextTasks);
-    setMessageText('');
+    try {
+      const nextTasks = await addTaskLog({
+        taskId: activeTask.id,
+        note: messageText.trim(),
+        author: currentUser?.name,
+        authorEmail: currentUser?.email,
+        companyId: currentUser?.companyId,
+      });
+      setTasks(nextTasks);
+      setMessageText('');
+    } catch (err) {
+      Alert.alert('Task Database Error', err.message || 'The message could not be sent.');
+    }
   };
 
-  // Wait for the first AsyncStorage read so the list doesn't flash its empty
+  // Wait for the first database read so the list doesn't flash its empty
   // state while real tasks are still loading.
   if (!isDataLoaded) {
     return <View style={[styles.container, { backgroundColor: palette.background }]} />;
@@ -171,6 +195,12 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {loadError ? (
+          <View style={styles.dbErrorBox}>
+            <Text style={styles.dbErrorText}>Task database unavailable: {loadError}</Text>
+          </View>
+        ) : null}
+
         {/* Active Task Workspace Card */}
         {activeTask && (
           <View style={[styles.featuredCard, { backgroundColor: palette.card, borderColor: palette.primary, borderWidth: 1.5 }]}>
@@ -431,6 +461,19 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
+  },
+  dbErrorBox: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#F87171',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+  },
+  dbErrorText: {
+    color: '#991B1B',
+    fontSize: 11,
+    fontWeight: '600',
   },
   featuredCard: {
     borderRadius: 14,

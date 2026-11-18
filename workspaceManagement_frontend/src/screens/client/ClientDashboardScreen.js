@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import { loadRequirements } from '../../services/requirementService';
+import { fetchClientRequirements } from '../../services/requirementApi';
 import HeaderBar from '../../components/common/HeaderBar';
 import Icon from '../../components/common/Icon';
 import CardButton from '../../components/common/CardButton';
@@ -22,19 +22,24 @@ export const ClientDashboardScreen = ({ navigation }) => {
   // shows up on the client's dashboard right away.
   const [requirements, setRequirements] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const load = async () => {
+    if (!currentUser?.email) { setIsDataLoaded(true); return; }
+    try {
+      const data = await fetchClientRequirements(currentUser.email);
+      setRequirements(data);
+    } catch (e) {
+      setRequirements([]);
+    }
+    setIsDataLoaded(true);
+  };
   useEffect(() => {
-    const load = async () => {
-      setRequirements(await loadRequirements());
-      setIsDataLoaded(true);
-    };
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
-  }, [navigation]);
+  }, [navigation, currentUser?.email]);
 
-  // A requirement belongs to exactly one client (clientId is set by the manager
-  // when it is created), so this client only ever sees its own deliverables.
-  const clientRequirements = requirements.filter((r) => r.clientId === currentUser?.id);
+  // Backend already returns only this client's requirements.
+  const clientRequirements = requirements;
 
   // Real numbers for the KPI grid — nothing is hardcoded. Each requirement
   // carries a lifecycleState that the manager moves along

@@ -9,6 +9,7 @@ import {
   Modal,
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
+import { useAuth } from '../../context/AuthContext';
 import { loadCompanyProfile, saveCompanyProfile } from '../../services/companyService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
@@ -18,14 +19,6 @@ import CardButton from '../../components/common/CardButton';
 import IconButton from '../../components/common/IconButton';
 import Icon from '../../components/common/Icon';
 import { IMAGES } from '../../assets/images';
-
-// Quick coordinate presets for common cities (just geographic shortcuts —
-// not tied to any particular demo company)
-const CAMPUS_PRESETS = [
-  { name: 'Lahore', lat: 31.5204, lng: 74.3587, radius: 200 },
-  { name: 'Islamabad', lat: 33.7294, lng: 73.0931, radius: 150 },
-  { name: 'Karachi', lat: 24.8138, lng: 67.03, radius: 250 },
-];
 
 const ALL_DAYS = [
   { key: 'M', label: 'Mon' },
@@ -39,10 +32,12 @@ const ALL_DAYS = [
 
 export const CompanyProfileScreen = ({ navigation }) => {
   const { getRolePalette, isDark } = useTheme();
+  const { currentUser } = useAuth();
   const palette = getRolePalette('ADMIN');
 
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [name, setName] = useState('');
+  const [mainCampus, setMainCampus] = useState('');
   const [timezone, setTimezone] = useState('');
   const [workingDays, setWorkingDays] = useState(['M', 'T1', 'W', 'T2', 'F']);
   const [latitude, setLatitude] = useState('');
@@ -52,20 +47,23 @@ export const CompanyProfileScreen = ({ navigation }) => {
   const [workingDaysPerMonth, setWorkingDaysPerMonth] = useState('22');
   const [absenceDeduction, setAbsenceDeduction] = useState('5000');
 
-  // The company profile now lives in AsyncStorage (it was removed from Redux) —
-  // load the saved values once on mount and seed the form fields from them.
+  // Load the company profile from the MySQL backend once on mount
   useEffect(() => {
     (async () => {
-      const company = await loadCompanyProfile();
-      setName(company.name);
-      setTimezone(company.timezone);
+      const company = await loadCompanyProfile(currentUser?.companyId);
+      setName(company.name || '');
+      setMainCampus(company.mainCampus || '');
+      setTimezone(company.timezone || '');
+      if (Array.isArray(company.workingDays) && company.workingDays.length > 0) {
+        setWorkingDays(company.workingDays);
+      }
       setLatitude(String(company.latitude));
       setLongitude(String(company.longitude));
       setRadius(String(company.geofenceRadiusMeters));
       setWorkingDaysPerMonth(String(company.standardWorkingDaysPerMonth || 22));
       setAbsenceDeduction(String(company.defaultAbsenceDeduction || 5000));
     })();
-  }, []);
+  }, [currentUser?.companyId]);
 
   const toggleDay = (dayKey) => {
     if (workingDays.includes(dayKey)) {
@@ -77,18 +75,28 @@ export const CompanyProfileScreen = ({ navigation }) => {
 
   const handleSave = async () => {
     const payload = {
-      name,
-      timezone,
+      name: name.trim(),
+      mainCampus: mainCampus.trim(),
+      timezone: timezone.trim(),
+      workingDays,
       latitude: parseFloat(latitude) || 31.5204,
       longitude: parseFloat(longitude) || 74.3587,
       geofenceRadiusMeters: parseInt(radius, 10) || 200,
       standardWorkingDaysPerMonth: parseInt(workingDaysPerMonth, 10) || 22,
       defaultAbsenceDeduction: parseInt(absenceDeduction, 10) || 5000,
     };
-    // Persist to AsyncStorage — the company profile's single source of truth
-    // (same read → merge → write pattern as the other *Service.js files).
-    await saveCompanyProfile(payload);
-    Alert.alert('Configuration Saved', 'Company profile and geofence policies updated.');
+    try {
+      await saveCompanyProfile(currentUser?.companyId, payload);
+      Alert.alert(
+        'Configuration Saved',
+        'Company profile and main campus geofence policy updated.'
+      );
+    } catch (err) {
+      Alert.alert(
+        'Save Failed',
+        err.message || 'Could not save company profile to database.'
+      );
+    }
   };
 
   return (
@@ -144,14 +152,21 @@ export const CompanyProfileScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Office Location & Geofence Perimeter */}
+        {/* Main Campus Location & Geofence Perimeter */}
         <View style={[styles.card, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}>
           <Text style={[styles.cardTitle, { color: palette.textPrimary }]}>
-            Office Location & Geofence Perimeter
+            Main Campus Location & Geofence Perimeter
           </Text>
           <Text style={[styles.cardSubtitle, { color: palette.textSecondary }]}>
-            Visual coordinate validation & 200m radius circle
+            Single headquarters location & geofence radius configuration
           </Text>
+
+          <AppInput
+            label="Main Campus Name / Location"
+            value={mainCampus}
+            onChangeText={setMainCampus}
+            placeholder="e.g. Main Campus — Lahore HQ"
+          />
 
           {/* Map Preview Container with dashed radius circle and pin */}
           <CardButton
@@ -167,10 +182,10 @@ export const CompanyProfileScreen = ({ navigation }) => {
             />
             {/* Dashed 200m circle overlay */}
             <View style={styles.dashedGeofenceCircle} />
-            {/* Centered Company HQ Pin */}
+            {/* Centered Main Campus Pin */}
             <View style={styles.mapPinContainer}>
               <View style={styles.pinBubble}>
-                <Text style={styles.pinBubbleText}>Company HQ</Text>
+                <Text style={styles.pinBubbleText}>{mainCampus.trim() || 'Main Campus HQ'}</Text>
               </View>
               <Icon name="location" size={26} color="#DC2626" />
             </View>
@@ -189,29 +204,6 @@ export const CompanyProfileScreen = ({ navigation }) => {
             style={{ marginBottom: 12 }}
             onPress={() => setMapModalVisible(true)}
           />
-
-          {/* Quick Campus Presets */}
-          <Text style={[styles.presetLabel, { color: palette.textSecondary }]}>Quick Campus Presets:</Text>
-          <View style={styles.presetsRow}>
-            {CAMPUS_PRESETS.map((p) => {
-              const isSelected = latitude === String(p.lat) && longitude === String(p.lng);
-              return (
-                <ChipButton
-                  key={p.name}
-                  label={p.name}
-                  selected={isSelected}
-                  unselectedStyle={{ backgroundColor: palette.background }}
-                  selectedStyle={{ backgroundColor: palette.badge }}
-                  textStyle={{ color: isSelected ? palette.primary : palette.textPrimary }}
-                  onPress={() => {
-                    setLatitude(String(p.lat));
-                    setLongitude(String(p.lng));
-                    setRadius(String(p.radius));
-                  }}
-                />
-              );
-            })}
-          </View>
 
           <View style={styles.coordsRow}>
             <View style={{ flex: 1, marginRight: 8 }}>
@@ -240,7 +232,7 @@ export const CompanyProfileScreen = ({ navigation }) => {
             onChangeText={setRadius}
             keyboardType="numeric"
             placeholder="200"
-            helperText="Employees must be within this radius to register attendance check-ins."
+            helperText="Employees must be within this main campus radius to register attendance check-ins."
           />
         </View>
 
@@ -256,10 +248,10 @@ export const CompanyProfileScreen = ({ navigation }) => {
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={[styles.modalTitle, { color: palette.textPrimary }]}>
-                    Interactive Geofence Map Picker
+                    Main Campus Geofence Map Picker
                   </Text>
                   <Text style={[styles.modalSubtitle, { color: palette.textSecondary }]}>
-                    Tap anywhere on map or choose campus preset to set geofence
+                    Tap anywhere on the map to set main campus geofence coordinates
                   </Text>
                 </View>
                 <IconButton
@@ -296,7 +288,7 @@ export const CompanyProfileScreen = ({ navigation }) => {
                 <View style={styles.modalGeofenceCircle} />
                 <View style={styles.modalCenterPin}>
                   <View style={styles.pinBubble}>
-                    <Text style={styles.pinBubbleText}>Selected Geofence Center</Text>
+                    <Text style={styles.pinBubbleText}>{mainCampus.trim() || 'Main Campus Center'}</Text>
                   </View>
                   <Icon name="location" size={32} color="#DC2626" />
                 </View>
@@ -321,31 +313,6 @@ export const CompanyProfileScreen = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* Campus Presets in Modal */}
-              <Text style={[styles.presetHeading, { color: palette.textPrimary }]}>Or Select Known Campus:</Text>
-              <View style={styles.modalPresetsGrid}>
-                {CAMPUS_PRESETS.map((p) => (
-                  <CardButton
-                    key={p.name}
-                    style={[
-                      styles.modalPresetBtn,
-                      { borderColor: palette.cardBorder, backgroundColor: palette.background },
-                      latitude === String(p.lat) && { borderColor: palette.primary, backgroundColor: palette.badge },
-                    ]}
-                    onPress={() => {
-                      setLatitude(String(p.lat));
-                      setLongitude(String(p.lng));
-                      setRadius(String(p.radius));
-                    }}
-                  >
-                    <Text style={[styles.modalPresetBtnTitle, { color: palette.textPrimary }]}>{p.name}</Text>
-                    <Text style={[styles.modalPresetBtnSub, { color: palette.textSecondary }]}>
-                      {p.lat}, {p.lng} • {p.radius}m
-                    </Text>
-                  </CardButton>
-                ))}
-              </View>
-
               {/* Apply Button */}
               <AppButton
                 title="Apply Selected Map Coordinates"
@@ -355,7 +322,7 @@ export const CompanyProfileScreen = ({ navigation }) => {
                 fullWidth
                 onPress={() => {
                   setMapModalVisible(false);
-                  Alert.alert('Map Location Applied', `Coordinates updated to (${latitude}, ${longitude}) with ${radius}m geofence.`);
+                  Alert.alert('Map Location Applied', `Main campus coordinates updated to (${latitude}, ${longitude}) with ${radius}m geofence.`);
                 }}
               />
             </View>
@@ -492,16 +459,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
-  presetLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  presetsRow: {
+  coordsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 14,
   },
   modalOverlay: {
     flex: 1,
@@ -593,28 +552,6 @@ const styles = StyleSheet.create({
   coordVal: {
     fontSize: 13,
     fontWeight: '800',
-    marginTop: 2,
-  },
-  presetHeading: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  modalPresetsGrid: {
-    gap: 6,
-    marginBottom: 14,
-  },
-  modalPresetBtn: {
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  modalPresetBtnTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  modalPresetBtnSub: {
-    fontSize: 10,
     marginTop: 2,
   },
 });

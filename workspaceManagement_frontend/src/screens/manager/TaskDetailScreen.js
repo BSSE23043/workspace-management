@@ -10,14 +10,13 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { fetchCompanyUsersApi } from '../../services/api';
 import {
   loadTasks,
   addTaskLog,
-  updateTaskStatus,
   editTask,
   toggleMilestoneSync,
-} from '../../services/taskService';
+} from '../../services/taskApi';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
 import Icon from '../../components/common/Icon';
@@ -33,19 +32,26 @@ export const TaskDetailScreen = ({ navigation, route }) => {
 
   const taskId = route?.params?.taskId;
 
-  // Tasks are NOT in Redux anymore — read them from AsyncStorage on mount and
+  // Tasks now come from MySQL through the backend API. Read them on mount and
   // refresh on focus so edits made here always show the latest saved data.
   const [tasks, setTasks] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [loadError, setLoadError] = useState('');
   useEffect(() => {
     const load = async () => {
-      setTasks(await loadTasks());
-      setIsDataLoaded(true);
+      try {
+        setTasks(await loadTasks({ companyId: currentUser?.companyId }));
+        setLoadError('');
+      } catch (err) {
+        setLoadError(err.message || 'Could not load tasks from the database.');
+      } finally {
+        setIsDataLoaded(true);
+      }
     };
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
-  }, [navigation]);
+  }, [navigation, currentUser?.companyId]);
 
   const task = tasks.find((t) => t.id === taskId) || tasks[0];
 
@@ -53,10 +59,13 @@ export const TaskDetailScreen = ({ navigation, route }) => {
   const [users, setUsers] = useState([]);
   useEffect(() => {
     (async () => {
-      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-      setUsers(storedUsers);
+      try {
+        setUsers(await fetchCompanyUsersApi(currentUser?.companyId));
+      } catch (e) {
+        setUsers([]);
+      }
     })();
-  }, []);
+  }, [currentUser?.companyId]);
 
   // Engineers assignable by this manager = their own direct reports.
   const engineers = users.filter((u) => u.managerId === currentUser?.id);
@@ -85,51 +94,50 @@ export const TaskDetailScreen = ({ navigation, route }) => {
 
   const handlePostNote = async () => {
     if (!managerNote.trim()) return;
-    const nextTasks = await addTaskLog({
-      taskId: task.id,
-      note: `Manager Note: ${managerNote.trim()}`,
-      author: currentUser?.name,
-    });
-    setTasks(nextTasks);
-    setManagerNote('');
-    Alert.alert('Note Posted', 'Manager progress note attached to task timeline.');
+    try {
+      const nextTasks = await addTaskLog({
+        taskId: task.id,
+        note: `Manager Note: ${managerNote.trim()}`,
+        author: currentUser?.name,
+        authorEmail: currentUser?.email,
+        companyId: currentUser?.companyId,
+      });
+      setTasks(nextTasks);
+      setManagerNote('');
+      Alert.alert('Note Posted', 'Manager progress note attached to the task timeline.');
+    } catch (err) {
+      Alert.alert('Task Database Error', err.message || 'The note could not be saved.');
+    }
   };
 
   const handleToggleSyncMilestone = async () => {
     const nextState = !task?.isMilestoneSynced;
-    // Both writes are sequential on purpose: each service call re-reads the
-    // saved list, so the second one must run after the first one has finished.
-    let nextTasks = await toggleMilestoneSync({
-      taskId: task.id,
-      isSynced: nextState,
-      author: currentUser?.name,
-    });
-    if (nextState) {
-      nextTasks = await updateTaskStatus({
+    try {
+      // The backend updates the milestone flag, status, progress and timeline
+      // log in one transaction.
+      const nextTasks = await toggleMilestoneSync({
         taskId: task.id,
-        status: 'COMPLETED',
-        progressPercent: 100,
-        note: 'Task marked ready for Client Milestone Sync by Engineering Manager.',
+        isSynced: nextState,
         author: currentUser?.name,
+        authorEmail: currentUser?.email,
+        companyId: currentUser?.companyId,
       });
-      Alert.alert(
-        'Milestone Synced',
-        `Task ${task.code} marked ready and synchronized with Client Deliverables.`
-      );
-    } else {
-      nextTasks = await updateTaskStatus({
-        taskId: task.id,
-        status: 'IN_PROGRESS',
-        progressPercent: 75,
-        note: 'Client Milestone Sync reverted by Engineering Manager.',
-        author: currentUser?.name,
-      });
-      Alert.alert(
-        'Milestone Sync Reverted',
-        `Task ${task.code} sync status has been un-marked and returned to In Progress.`
-      );
+      setTasks(nextTasks);
+
+      if (nextState) {
+        Alert.alert(
+          'Milestone Synced',
+          `Task ${task.code} marked ready and synchronized with Client Deliverables.`
+        );
+      } else {
+        Alert.alert(
+          'Milestone Sync Reverted',
+          `Task ${task.code} sync status has been un-marked and returned to In Progress.`
+        );
+      }
+    } catch (err) {
+      Alert.alert('Task Database Error', err.message || 'The sync status could not be saved.');
     }
-    setTasks(nextTasks);
   };
 
   const handleSaveEdit = async () => {
@@ -140,20 +148,26 @@ export const TaskDetailScreen = ({ navigation, route }) => {
     const selectedEngs = engineers.filter((e) => editAssignedIds.includes(e.id));
     const names = selectedEngs.map((e) => e.name);
 
-    const nextTasks = await editTask({
-      taskId: task.id,
-      title: editTitle.trim(),
-      description: editDesc.trim(),
-      priority: editPriority,
-      internalDeadline: editInternalDeadline,
-      clientDeadline: editClientDeadline,
-      assignedToIds: editAssignedIds,
-      assignedToNames: names,
-      author: currentUser?.name,
-    });
-    setTasks(nextTasks);
-    setIsEditModalVisible(false);
-    Alert.alert('Task Updated', `Task ${task.code} details saved successfully.`);
+    try {
+      const nextTasks = await editTask({
+        taskId: task.id,
+        title: editTitle.trim(),
+        description: editDesc.trim(),
+        priority: editPriority,
+        internalDeadline: editInternalDeadline,
+        clientDeadline: editClientDeadline,
+        assignedToIds: editAssignedIds,
+        assignedToNames: names,
+        author: currentUser?.name,
+        authorEmail: currentUser?.email,
+        companyId: currentUser?.companyId,
+      });
+      setTasks(nextTasks);
+      setIsEditModalVisible(false);
+      Alert.alert('Task Updated', `Task ${task.code} details saved successfully.`);
+    } catch (err) {
+      Alert.alert('Task Database Error', err.message || 'The task could not be updated.');
+    }
   };
 
   // Wait for the first AsyncStorage read before rendering anything.
@@ -174,7 +188,9 @@ export const TaskDetailScreen = ({ navigation, route }) => {
         />
         <View style={styles.notFoundBox}>
           <Text style={{ color: palette.textSecondary, textAlign: 'center' }}>
-            This task no longer exists or has not been assigned yet.
+            {loadError
+              ? `Task database unavailable.\n${loadError}\n\nStart MySQL and the backend, then reopen this task.`
+              : 'This task no longer exists or has not been assigned yet.'}
           </Text>
         </View>
       </View>

@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../context/AuthContext';
-import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { fetchCompanyUsersApi } from '../../services/api';
 import { loadCompanyProfile } from '../../services/companyService';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppButton from '../../components/common/AppButton';
@@ -22,42 +22,42 @@ export const AdminDashboardScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
   const palette = getRolePalette('ADMIN');
 
-  // Company profile lives in AsyncStorage now (it was removed from Redux) —
-  // it is loaded below on mount + focus, exactly like the user list.
+  // Company profile and user list loaded from the MySQL backend database
   const [company, setCompany] = useState({});
-
-  // The real user list lives in AsyncStorage (users this admin has added +
-  // company admins created by the Super Admin).
-  // If the logged-in admin has a companyId (created by the Super Admin),
-  // we only count users of that company — so a freshly created admin
-  // starts with zero demo users from other companies.
   const [users, setUsers] = useState([]);
 
-  const loadUsersFromStorage = async () => {
-    const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-    const scopedUsers = currentUser?.companyId
-      ? storedUsers.filter((u) => u.companyId === currentUser.companyId)
-      : storedUsers;
-    setUsers(scopedUsers);
+  const loadUsersFromDatabase = async () => {
+    if (!currentUser?.companyId) {
+      setUsers([]);
+      return;
+    }
+    try {
+      const companyUsers = await fetchCompanyUsersApi(currentUser.companyId);
+      setUsers(companyUsers);
+    } catch (err) {
+      console.warn('[AdminDashboard] Failed loading users from DB:', err);
+    }
   };
 
-  const loadCompanyFromStorage = async () => {
-    setCompany(await loadCompanyProfile());
+  const loadCompanyFromDatabase = async () => {
+    if (!currentUser?.companyId) {
+      return;
+    }
+    const profile = await loadCompanyProfile(currentUser.companyId);
+    setCompany(profile);
   };
 
   // Load once when the screen mounts, and reload every time this screen
-  // gains focus again (e.g. after coming back from the Employee Form
-  // screen where a new user was added, or from Company Profile after a save).
+  // gains focus again (e.g. after coming back from Employee Form or Company Profile).
   useEffect(() => {
     const loadDashboardData = () => {
-      loadUsersFromStorage();
-      loadCompanyFromStorage();
+      loadUsersFromDatabase();
+      loadCompanyFromDatabase();
     };
     loadDashboardData();
     const unsubscribe = navigation.addListener('focus', loadDashboardData);
-    // Clean up the focus listener when the screen unmounts
     return unsubscribe;
-  }, []);
+  }, [currentUser?.companyId]);
 
   // Compute live workforce snapshot counts with useMemo
   const snapshot = useMemo(() => {

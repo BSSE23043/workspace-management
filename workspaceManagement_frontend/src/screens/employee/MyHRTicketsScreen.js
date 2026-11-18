@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { loadTickets, createTicket } from '../../services/ticketService';
+import { fetchMyTickets, createHrTicket } from '../../services/ticketApi';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
 import HeaderBar from '../../components/common/HeaderBar';
@@ -20,19 +20,35 @@ export const MyHRTicketsScreen = ({ navigation, isEmbedded = false }) => {
   const { getRolePalette } = useTheme();
   const palette = getRolePalette('EMPLOYEE');
 
-  // Tickets live in AsyncStorage — load on demand (mount + every focus) and
-  // refresh local state after each create so the history stays current.
+  // Tickets are stored in the backend database now. The list is fetched for the
+  // logged-in employee on mount and again on focus so it stays fresh.
   const [tickets, setTickets] = useState([]);
-  useEffect(() => {
-    const load = async () => {
-      setTickets(await loadTickets());
-    };
-    load();
-    const unsubscribe = navigation.addListener('focus', load);
-    return () => unsubscribe();
-  }, [navigation]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
-  const myTickets = tickets.filter((t) => t.userId === currentUser?.id);
+  const loadMyTickets = useCallback(async () => {
+    if (!currentUser?.email) {
+      setTickets([]);
+      setIsLoading(false);
+      return;
+    }
+    try {
+      setLoadError(null);
+      const data = await fetchMyTickets(currentUser.email);
+      setTickets(data);
+    } catch (error) {
+      setLoadError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser?.email]);
+
+  useEffect(() => {
+    loadMyTickets();
+    const unsubscribe = navigation.addListener('focus', loadMyTickets);
+    return () => unsubscribe();
+  }, [navigation, loadMyTickets]);
 
   // Simple ticket form: Subject, Body and the date of the event being reported
   const [subject, setSubject] = useState('');
@@ -45,21 +61,37 @@ export const MyHRTicketsScreen = ({ navigation, isEmbedded = false }) => {
       Alert.alert('Validation Error', 'Subject and body are required.');
       return;
     }
+    if (!currentUser?.email) {
+      Alert.alert('Validation Error', 'No active employee session was found.');
+      return;
+    }
 
-    // createTicket writes the new ticket to AsyncStorage and returns the list.
-    const next = await createTicket({
-      userId: currentUser?.id || '',
-      userName: currentUser?.name || '',
-      subject: subject.trim(),
-      explanation: explanation.trim(),
-      date: targetDate,
-    });
-    setTickets(next);
+    // Saves the ticket to the backend, then refreshes the history so the new
+    // database row (and its generated TKT-### id) shows up immediately.
+    setIsSubmitting(true);
+    try {
+      await createHrTicket({
+        userEmail: currentUser.email,
+        subject: subject.trim(),
+        description: explanation.trim(),
+        eventDate: targetDate,
+      });
+      await loadMyTickets();
+      setSubject('');
+      setExplanation('');
 
-    Alert.alert(
-      'HR Ticket Submitted',
-      'Your ticket has been placed into the HR Operations Queue.'
-    );
+      Alert.alert(
+        'HR Ticket Submitted',
+        'Your ticket has been placed into the HR Operations Queue.'
+      );
+    } catch (error) {
+      Alert.alert(
+        'Submission Failed',
+        error.message || 'Could not submit your ticket. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -120,6 +152,7 @@ export const MyHRTicketsScreen = ({ navigation, isEmbedded = false }) => {
             variant="primary"
             size="md"
             fullWidth
+            loading={isSubmitting}
             onPress={handleSubmitTicket}
           />
         </View>
@@ -128,45 +161,44 @@ export const MyHRTicketsScreen = ({ navigation, isEmbedded = false }) => {
         <Text style={[styles.sectionHeading, { color: palette.textPrimary }]}>
           Ticket History &amp; Logs
         </Text>
-        {myTickets.length === 0 ? (
+        {isLoading ? (
+          <Text style={[styles.emptyHistoryText, { color: palette.textSecondary }]}>
+            Loading tickets...
+          </Text>
+        ) : loadError ? (
+          <Text style={[styles.emptyHistoryText, { color: '#B91C1C' }]}>
+            Could not load tickets: {loadError}
+          </Text>
+        ) : tickets.length === 0 ? (
           <Text style={[styles.emptyHistoryText, { color: palette.textSecondary }]}>
             No tickets submitted yet — new tickets will appear here.
           </Text>
         ) : null}
-        {myTickets.map((t) => (
-          <CardButton
-            key={t.id}
-            style={[styles.ticketCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('MyHRTicketDetail', { ticketId: t.id })}
-          >
-            <View style={styles.ticketTopRow}>
-              <Text style={[styles.ticketId, { color: palette.primary }]}>#{t.id}</Text>
-              <View
-                style={[
-                  styles.statusTag,
-                  t.status === 'RESOLVED' ? styles.tagResolved : styles.tagOpen,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusTagText,
-                    t.status === 'RESOLVED' ? styles.textResolved : styles.textOpen,
-                  ]}
-                >
-                  {t.status}
-                </Text>
+        {tickets.map((t) => {
+          const statusStyles = getStatusTagStyles(t.status);
+          return (
+            <CardButton
+              key={t.id}
+              style={[styles.ticketCard, { backgroundColor: palette.card, borderColor: palette.cardBorder }]}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('MyHRTicketDetail', { ticketId: t.id })}
+            >
+              <View style={styles.ticketTopRow}>
+                <Text style={[styles.ticketId, { color: palette.primary }]}>#{t.id}</Text>
+                <View style={[styles.statusTag, statusStyles.tag]}>
+                  <Text style={[styles.statusTagText, statusStyles.text]}>{t.status}</Text>
+                </View>
               </View>
-            </View>
 
-            <Text style={[styles.ticketSubject, { color: palette.textPrimary }]}>{t.subject}</Text>
-            <Text style={[styles.ticketDate, { color: palette.textSecondary }]}>{t.date}</Text>
-            <Text style={[styles.ticketExpl, { color: palette.textSecondary }]}>{t.explanation}</Text>
-            <Text style={[styles.ticketOpenHint, { color: palette.primary }]}>
-              View discussion →
-            </Text>
-          </CardButton>
-        ))}
+              <Text style={[styles.ticketSubject, { color: palette.textPrimary }]}>{t.subject}</Text>
+              <Text style={[styles.ticketDate, { color: palette.textSecondary }]}>{t.date}</Text>
+              <Text style={[styles.ticketExpl, { color: palette.textSecondary }]}>{t.explanation}</Text>
+              <Text style={[styles.ticketOpenHint, { color: palette.primary }]}>
+                View discussion →
+              </Text>
+            </CardButton>
+          );
+        })}
       </ScrollView>
 
       <DatePickerModal
@@ -178,6 +210,13 @@ export const MyHRTicketsScreen = ({ navigation, isEmbedded = false }) => {
       />
     </View>
   );
+};
+
+const getStatusTagStyles = (status) => {
+  if (status === 'RESOLVED') return { tag: styles.tagResolved, text: styles.textResolved };
+  if (status === 'IN_PROGRESS') return { tag: styles.tagProgress, text: styles.textProgress };
+  if (status === 'REJECTED') return { tag: styles.tagRejected, text: styles.textRejected };
+  return { tag: styles.tagOpen, text: styles.textOpen };
 };
 
 const styles = StyleSheet.create({
@@ -230,13 +269,17 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   tagOpen: { backgroundColor: '#FEF3C7' },
+  tagProgress: { backgroundColor: '#DBEAFE' },
   tagResolved: { backgroundColor: '#DCFCE7' },
+  tagRejected: { backgroundColor: '#FEE2E2' },
   statusTagText: {
     fontSize: 10,
     fontWeight: '800',
   },
   textOpen: { color: '#B45309' },
+  textProgress: { color: '#1D4ED8' },
   textResolved: { color: '#16A34A' },
+  textRejected: { color: '#B91C1C' },
   ticketSubject: {
     fontSize: 13,
     fontWeight: '700',
