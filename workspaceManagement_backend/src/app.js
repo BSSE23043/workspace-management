@@ -9,6 +9,7 @@ const leaveRoutes = require('./routes/leaveRoutes');
 const requirementRoutes = require('./routes/requirementRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const taskRoutes = require('./routes/taskRoutes');
+const userRoutes = require('./routes/userRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const salaryRoutes = require('./routes/salaryRoutes');
 
@@ -33,6 +34,7 @@ app.use('/api/leaves', leaveRoutes);
 app.use('/api/requirements', requirementRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/salary', salaryRoutes);
 

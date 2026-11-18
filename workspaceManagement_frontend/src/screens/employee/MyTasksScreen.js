@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import { fetchMyTasks, updateTaskStatusApi, addTaskLogApi } from '../../services/taskApi';
 import { loadTasks, updateTaskStatus, addTaskLog } from '../../services/taskApi';
 import { timeAgo } from '../../utils/timeAgo';
 import HeaderBar from '../../components/common/HeaderBar';
@@ -39,22 +38,11 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
   // another screen) shows the latest data next time the employee looks.
   const [tasks, setTasks] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const load = async () => {
-    if (!currentUser?.email) { setIsDataLoaded(true); return; }
-    try {
-      const data = await fetchMyTasks(currentUser.email);
-      setTasks(data);
-    } catch (e) {
-      setTasks([]);
-    }
-    setIsDataLoaded(true);
-  };
-  useEffect(() => {
   const [loadError, setLoadError] = useState('');
   useEffect(() => {
     const load = async () => {
       try {
-        setTasks(await loadTasks());
+        setTasks(await loadTasks({ companyId: currentUser?.companyId }));
         setLoadError('');
       } catch (err) {
         setLoadError(err.message || 'Could not load tasks from the database.');
@@ -65,15 +53,21 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
-  }, [navigation, currentUser?.email]);
+  }, [navigation, currentUser?.companyId]);
 
   const [selectedTab, setSelectedTab] = useState('ALL');
 
-  // Filter tasks to this employee (supports both assignedToId and multi-assignees assignedToIds)
+  // Filter tasks to this employee. Emails are the DB identity, and taskApi also
+  // maps them into assignedToIds, so check both shapes.
+  const currentUserEmail = String(currentUser?.email || '').toLowerCase();
   const myTasks = tasks.filter(
     (t) =>
-      t.assignedToEmails?.includes(currentUser?.email) ||
-      t.assignedToIds?.includes(currentUser?.email)
+      (t.assignedToEmails || []).some(
+        (value) => String(value).toLowerCase() === currentUserEmail
+      ) ||
+      (t.assignedToIds || []).some(
+        (value) => String(value).toLowerCase() === currentUserEmail
+      )
   );
 
   const [selectedTaskId, setSelectedTaskId] = useState(myTasks[0]?.id || '');
@@ -120,16 +114,6 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
     const pct = parseInt(progressPercent, 10);
     const validPct = isNaN(pct) ? task.progressPercent || 0 : Math.min(100, Math.max(0, pct));
 
-    // Writes the new status/progress to AsyncStorage and refreshes local state
-    // with the saved list (taskService hands it straight back).
-    const updated = await updateTaskStatusApi({
-      taskId: task.id,
-      status: taskState,
-      progressPercent: validPct,
-      note: progressNote.trim() || `Progress recorded at ${validPct}%`,
-      authorEmail: currentUser?.email,
-    });
-    if (updated) setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
     try {
       // Persists status/progress to MySQL and refreshes local state with the
       // saved list (taskApi returns the fresh list).
@@ -140,6 +124,7 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
         note: progressNote.trim() || `Progress recorded at ${validPct}%`,
         author: currentUser?.name,
         authorEmail: currentUser?.email,
+        companyId: currentUser?.companyId,
       });
       setTasks(nextTasks);
 
@@ -156,19 +141,13 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
   // manager sees it on his "Chronological Progress Log" screen.
   const handleSendMessage = async () => {
     if (!messageText.trim() || !activeTask) return;
-    const updated = await addTaskLogApi({
-      taskId: activeTask.id,
-      note: messageText.trim(),
-      authorEmail: currentUser?.email,
-    });
-    if (updated) setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-    setMessageText('');
     try {
       const nextTasks = await addTaskLog({
         taskId: activeTask.id,
         note: messageText.trim(),
         author: currentUser?.name,
         authorEmail: currentUser?.email,
+        companyId: currentUser?.companyId,
       });
       setTasks(nextTasks);
       setMessageText('');
@@ -177,7 +156,7 @@ export const MyTasksScreen = ({ navigation, isEmbedded = false }) => {
     }
   };
 
-  // Wait for the first AsyncStorage read so the list doesn't flash its empty
+  // Wait for the first database read so the list doesn't flash its empty
   // state while real tasks are still loading.
   if (!isDataLoaded) {
     return <View style={[styles.container, { backgroundColor: palette.background }]} />;

@@ -1,12 +1,3 @@
-const express = require('express');
-const asyncHandler = require('../utils/asyncHandler');
-const taskController = require('../controllers/taskController');
-
-const router = express.Router();
-
-router.get('/', asyncHandler(taskController.listMyTasks));
-router.put('/:id/status', asyncHandler(taskController.updateStatus));
-router.post('/:id/logs', asyncHandler(taskController.addLog));
 // Task domain REST API.
 //
 // Uses the tables from src/schema/wms_schema.sql:
@@ -18,7 +9,7 @@ router.post('/:id/logs', asyncHandler(taskController.addLog));
 
 const express = require('express');
 const crypto = require('crypto');
-const pool = require('../config/db');
+const { pool } = require('../config/db');
 
 const router = express.Router();
 
@@ -50,6 +41,7 @@ const computeBufferDays = (internalDeadline, clientDeadline) => {
 
 const httpError = (status, message) => {
   const err = new Error(message);
+  err.statusCode = status;
   err.status = status;
   return err;
 };

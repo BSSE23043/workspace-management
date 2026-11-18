@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { fetchCompanyUsersApi } from '../../services/api';
 import {
   loadTasks,
   addTaskLog,
@@ -40,7 +40,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
   useEffect(() => {
     const load = async () => {
       try {
-        setTasks(await loadTasks());
+        setTasks(await loadTasks({ companyId: currentUser?.companyId }));
         setLoadError('');
       } catch (err) {
         setLoadError(err.message || 'Could not load tasks from the database.');
@@ -51,7 +51,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
-  }, [navigation]);
+  }, [navigation, currentUser?.companyId]);
 
   const task = tasks.find((t) => t.id === taskId) || tasks[0];
 
@@ -59,10 +59,13 @@ export const TaskDetailScreen = ({ navigation, route }) => {
   const [users, setUsers] = useState([]);
   useEffect(() => {
     (async () => {
-      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-      setUsers(storedUsers);
+      try {
+        setUsers(await fetchCompanyUsersApi(currentUser?.companyId));
+      } catch (e) {
+        setUsers([]);
+      }
     })();
-  }, []);
+  }, [currentUser?.companyId]);
 
   // Engineers assignable by this manager = their own direct reports.
   const engineers = users.filter((u) => u.managerId === currentUser?.id);
@@ -97,6 +100,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
         note: `Manager Note: ${managerNote.trim()}`,
         author: currentUser?.name,
         authorEmail: currentUser?.email,
+        companyId: currentUser?.companyId,
       });
       setTasks(nextTasks);
       setManagerNote('');
@@ -116,6 +120,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
         isSynced: nextState,
         author: currentUser?.name,
         authorEmail: currentUser?.email,
+        companyId: currentUser?.companyId,
       });
       setTasks(nextTasks);
 
@@ -155,6 +160,7 @@ export const TaskDetailScreen = ({ navigation, route }) => {
         assignedToNames: names,
         author: currentUser?.name,
         authorEmail: currentUser?.email,
+        companyId: currentUser?.companyId,
       });
       setTasks(nextTasks);
       setIsEditModalVisible(false);

@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { fetchCompanyUsersApi } from '../../services/api';
 import { loadTasks } from '../../services/taskApi';
 import { loadRequirements } from '../../services/requirementService';
 import { loadAttendance } from '../../services/attendanceService';
@@ -31,7 +31,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        setTasks(await loadTasks());
+        setTasks(await loadTasks({ companyId: currentUser?.companyId }));
         setTaskError('');
       } catch (err) {
         setTaskError(err.message || 'Could not load tasks from the database.');
@@ -46,17 +46,20 @@ export const ManagerDashboardScreen = ({ navigation }) => {
     loadData();
     const unsubscribe = navigation.addListener('focus', loadData);
     return () => unsubscribe();
-  }, [navigation]);
+  }, [navigation, currentUser?.companyId]);
 
   // The manager's team = employee users whose reporting line points to this
   // manager (managerId). Users live in AsyncStorage (single source of truth).
   const [users, setUsers] = useState([]);
   useEffect(() => {
     (async () => {
-      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-      setUsers(storedUsers);
+      try {
+        setUsers(await fetchCompanyUsersApi(currentUser?.companyId));
+      } catch (e) {
+        setUsers([]);
+      }
     })();
-  }, []);
+  }, [currentUser?.companyId]);
 
   const myTeam = useMemo(
     () => users.filter((u) => u.managerId === currentUser?.id),

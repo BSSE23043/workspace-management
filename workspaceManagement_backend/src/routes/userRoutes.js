@@ -8,7 +8,7 @@
 // POST /api/users/sync  { users: [...] }
 
 const express = require('express');
-const pool = require('../config/db');
+const { pool } = require('../config/db');
 
 const router = express.Router();
 

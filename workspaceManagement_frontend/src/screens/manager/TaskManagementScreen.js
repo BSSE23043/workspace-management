@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import storageService, { STORAGE_KEYS } from '../../services/storageService';
+import { fetchCompanyUsersApi } from '../../services/api';
 import { loadTasks, createTask } from '../../services/taskApi';
 import HeaderBar from '../../components/common/HeaderBar';
 import AppInput from '../../components/common/AppInput';
@@ -40,7 +40,7 @@ export const TaskManagementScreen = ({ navigation }) => {
   useEffect(() => {
     const load = async () => {
       try {
-        setTasks(await loadTasks());
+        setTasks(await loadTasks({ companyId: currentUser?.companyId }));
         setLoadError('');
       } catch (err) {
         setLoadError(err.message || 'Could not load tasks from the database.');
@@ -51,16 +51,19 @@ export const TaskManagementScreen = ({ navigation }) => {
     load();
     const unsubscribe = navigation.addListener('focus', load);
     return () => unsubscribe();
-  }, [navigation]);
+  }, [navigation, currentUser?.companyId]);
 
   // Users are loaded from AsyncStorage (Redux no longer stores the user list)
   const [users, setUsers] = useState([]);
   useEffect(() => {
     (async () => {
-      const storedUsers = await storageService.getItem(STORAGE_KEYS.USERS, []);
-      setUsers(storedUsers);
+      try {
+        setUsers(await fetchCompanyUsersApi(currentUser?.companyId));
+      } catch (e) {
+        setUsers([]);
+      }
     })();
-  }, []);
+  }, [currentUser?.companyId]);
 
   const [activeTab, setActiveTab] = useState('ALL');
   const [isCreateOpen, setIsCreateOpen] = useState(true);
@@ -126,6 +129,7 @@ export const TaskManagementScreen = ({ navigation }) => {
       // Writes the new task to MySQL through the backend API and refreshes the
       // board with the saved list (taskApi returns the fresh list).
       const nextTasks = await createTask({
+        companyId: currentUser?.companyId,
         title: taskTitle.trim(),
         assignedToIds,
         // The real variable above is called assignedNames — passing a shorthand

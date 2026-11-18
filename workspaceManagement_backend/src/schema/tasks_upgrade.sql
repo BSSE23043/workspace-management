@@ -24,7 +24,6 @@ CREATE TABLE IF NOT EXISTS task_logs (
     id VARCHAR(36) NOT NULL COMMENT 'UUID',
     task_id VARCHAR(20) NOT NULL,
     author_email VARCHAR(190) NULL,
-    author_name VARCHAR(120) NULL,
     note TEXT NOT NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
@@ -39,6 +38,11 @@ CREATE TABLE IF NOT EXISTS task_logs (
         ON DELETE SET NULL
         ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Older task_logs tables (created before the Manager task migration) have no
+-- author_name column, so add it for existing databases.
+ALTER TABLE task_logs
+    ADD COLUMN author_name VARCHAR(120) NULL AFTER author_email;
 
 -- Microsecond precision keeps rapid timeline messages in the right order.
 ALTER TABLE task_logs

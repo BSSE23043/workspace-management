@@ -7,9 +7,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../hooks/useTheme';
-import { fetchMyTasks } from '../../services/taskApi';
-import { loadTasks } from '../../services/taskApi';
-import { loadLeaves } from '../../services/leaveService';
+import { loadMyTasks } from '../../services/taskApi';
+import { fetchMyLeaves } from '../../services/leaveApi';
 import { fetchMyAttendance } from '../../services/attendanceApi';
 import { fetchSalaryConfigApi } from '../../services/salaryApi';
 import HeaderBar from '../../components/common/HeaderBar';
@@ -26,8 +25,6 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
 
   // Tasks, attendance, leaves & the salary policy are NOT in Redux anymore —
   // hydrate them on mount and refresh on focus so the cards stay current.
-  // Tasks now come from MySQL through the backend API; leaves, punch logs and
-  // the salary policy still come from AsyncStorage. Refresh everything on focus.
   const [tasks, setTasks] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [logs, setLogs] = useState([]);
@@ -35,15 +32,8 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   useEffect(() => {
     const load = async () => {
-      setTasks(await fetchMyTasks(currentUser?.email || ''));
-      try {
-        setTasks(await loadTasks());
-      } catch (err) {
-        console.warn('[EmployeeDashboard] Task database unavailable:', err.message);
-        setTasks([]);
-      }
-
-      setLeaves(await loadLeaves());
+      setTasks(await loadMyTasks({ userEmail: currentUser?.email, companyId: currentUser?.companyId }));
+      setLeaves(await fetchMyLeaves(currentUser?.email || ''));
       setLogs(await fetchMyAttendance(currentUser?.email || ''));
       setSalaryConfig(await fetchSalaryConfigApi(currentUser?.email || ''));
       setIsDataLoaded(true);
@@ -69,7 +59,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const paidLeaveDays = leaves
     .filter(
       (l) =>
-        l.userId === currentUser?.id &&
+        l.userEmail === currentUser?.email &&
         l.status === 'APPROVED' &&
         (l.startDate || '').startsWith(monthPrefix)
     )

@@ -20,16 +20,14 @@
 - **Nature:** A semester Mobile-App-Dev course project deliberately built to showcase the full
   React Native syllabus (class components, all list types, all hooks, Context + Redux, AsyncStorage,
   drawer/tabs/stack navigation). Code contains "Syllabus Requirement:" comments.
-- **Backend:** **NONE.** The app is fully offline/seed-driven. Most domain data lives in Redux
-  (in-memory, seeded from `src/data/seedData.js`); the auth session is mirrored to AsyncStorage.
-  **Users are NOT in Redux at all** — AsyncStorage `@wms_users` is the single source of truth and
-  every screen loads the user list from it with local `useState`/`useEffect`. **Tasks and
-  requirements are NOT in Redux either** — AsyncStorage `@wms_tasks` / `@wms_requirements` are the
-  source of truth, read on demand by `services/taskService.js` / `services/requirementService.js`
-  (screens load them on mount + focus into local state; mutations read→change→write). The
-  user database is not seeded — it starts empty; accounts only exist via the Super Admin flow.
-  No HTTP/network calls anywhere (the `fetch` demos were removed with the
-  announcements feature — `fetch` is not in the syllabus concepts list).
+- **Backend:** Node.js + Express 5 + MySQL (`workspaceManagement_backend/`). Auth/session is
+  in-memory in `AuthContext`; companies, users, tasks, task logs/assignments, attendance, leaves,
+  HR tickets and salary config are MySQL-backed. Requirements and a few legacy manager/HR screens
+  still use AsyncStorage. AsyncStorage is **not** the source of truth for users or tasks; task
+  screens use `services/taskApi.js` with an explicit `companyId`.
+- **Single database:** MySQL `workspace_management` is the shared source for auth/admin, tasks,
+  leaves, tickets, attendance and salary. Manager task screens load the company roster via
+  `fetchCompanyUsersApi(companyId)`; no task/user sync from AsyncStorage.
 - **Blueprint:** `repo/workforce_management_system_developer_blueprint.md` (repo root) is the
   authoritative spec: role permission matrix, syllabus compliance matrix, formulas, and 6 phased
   build prompts. Consult it before large changes.
@@ -135,7 +133,7 @@ src/
 ├── navigation/             AppNavigator + 5 role navigators + SuperAdminNavigator (see §4)
 ├── screens/                34 screens (see §6)
 ├── services/               storageService.js (AsyncStorage + seed/reset),
-│                           taskService.js + requirementService.js (load/save + mutations)
+│                           taskApi.js (MySQL tasks) + requirementService.js (load/save + mutations)
 ├── store/                  index.js + slices/ (1 slice: theme — see §7)
 └── utils/                  geofence.js, imagePicker.js, permissions.js, salaryCalculator.js, superAdminConfig.js, timeAgo.js, validation.js
 ```
@@ -203,7 +201,7 @@ approve/reject; attendance-correction tickets also dispatch `overrideAttendance`
 `HRProfileScreen` (read-only + DP upload).
 
 **manager/** — all team lists are scoped to `u.managerId === currentUser.id` (real reports loaded
-from AsyncStorage `@wms_users`; no demo names/ids remain). `ManagerDashboardScreen` (real KPIs:
+from MySQL via `fetchCompanyUsersApi(currentUser.companyId)`; user id/managerId are emails). `ManagerDashboardScreen` (real KPIs:
 attendance present/total, team task count + dual-deadline conflict count, pending team leaves,
 "Recent Team Tasks" list; empty states when nothing exists), `TeamAttendanceScreen`
 (SectionList of direct reports' logs for a shift-steppable date, 3-state pills, real
@@ -233,7 +231,8 @@ month cycles), `WorkAndRequestsHubScreen`
   leave type, date range, overlap validation; loads/submits via the backend API), `MyHRTicketsScreen`
   (subject/body/event-date form + ticket history; submits and lists via the backend API),
   `MyHRTicketDetailScreen` (ticket info + HR discussion thread; replies via the backend API),
-`MyTasksScreen` (status tabs, quick % progress), `EmployeeProfileScreen`.
+`MyTasksScreen` (MySQL tasks via `loadTasks({ companyId })`, status tabs, quick % progress),
+`EmployeeProfileScreen`; the dashboard task card uses `loadMyTasks({ userEmail, companyId })`.
 
 **client/** — both requirement screens are **scoped to the logged-in client**: they filter on
 `r.clientId === currentUser.id` (set by the manager's Client Organization dropdown at creation time),
@@ -252,10 +251,10 @@ account + the admin-set Company Profile name loaded from `@wms_company` in `comp
 `configureStore({ theme })` — **only one slice remains.**
 **State is in-memory only — the theme flag resets on reload and is restored from `@wms_theme_preference` at
 boot** (`App.js` → `ThemeBootstrap`). All reducers synchronous.
-**No `users` / `company` / `tasks` / `requirements` / `tickets` / `leaves` / `attendance` / `salary` slices** —
-those datasets live in AsyncStorage (`@wms_users`, `@wms_company`, `@wms_tasks`, `@wms_requirements`,
-`@wms_tickets`, `@wms_leaves`, `@wms_attendance`, `@wms_salary_config`) and are read/written through the matching
-`services/*Service.js` (screens hold them in local `useState`, load on mount + focus).
+**No `users` / `company` / `tasks` / `requirements` / `tickets` / `leaves` / `attendance` / `salary` slices** -
+those datasets are either loaded from MySQL through `services/api.js` / `apiClient.js` (users,
+companies, tasks, leaves, tickets, attendance, salary) or still read from `requirementService.js`
+and the legacy manager/HR AsyncStorage services. Screens hold them in local `useState`, load on mount + focus.
 
 | Slice | State | Notable actions |
 |---|---|---|
@@ -277,20 +276,20 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
   `@wms_company` overlaid on `SEED_COMPANY` so the shape is always complete) / `saveCompanyProfile(payload)`
   (read → merge → write → return). Used by `AdminDashboardScreen` (org card) and `CompanyProfileScreen`
   (form load + save); the client `ProfileSettingsScreen` still reads `@wms_company` directly.
-- **`taskService.js`** — tasks no longer in Redux. `loadTasks()` / `saveTasks()` over
-  `@wms_tasks`; mutations `createTask` (computes bufferDays/hasConflict), `editTask`,
-  `updateTaskStatus`, `toggleMilestoneSync`, `addTaskLog`. Each mutation does
-  read → change → write → returns the fresh array, so screens do
-  `setTasks(await createTask({...}))`.
+- **`taskApi.js`** - tasks are MySQL-backed. `loadTasks({ companyId })` maps the company roster
+  from `fetchCompanyUsersApi()` and reads `GET /api/tasks`; `loadMyTasks({ userEmail, companyId })`
+  filters for the employee. Mutations `createTask`, `editTask`, `updateTaskStatus`,
+  `toggleMilestoneSync`, `addTaskLog` all require `companyId` and return the fresh list. The old
+  AsyncStorage `taskService.js` was removed by the Manager branch.
 - **`requirementService.js`** — same pattern over `@wms_requirements`:
   `loadRequirements()` / `saveRequirements()`; mutations `addRequirement`, `toggleMilestone`,
   `addMilestone`, `removeMilestone`, `publishBroadcast`, `addClientClarificationReply`,
   `updateLifecycleState`. A shared `recount()` helper keeps completed/total/progress % in sync.
-- Consumer screens: ManagerDashboard, TaskManagement, TaskDetail, RequirementCoordination
-  (manager); MyTasks, EmployeeDashboard (employee); ClientDashboard, MyRequirements (client).
-  Each holds the list in local `useState`, loads on mount **and on
-  `navigation.addListener('focus')`** (tab screens stay mounted), and gates the first render
-  with an `isDataLoaded` flag so empty states don't flash.
+- Consumer screens: ManagerDashboard, TaskManagement, TaskDetail (manager); MyTasks,
+  EmployeeDashboard (employee) use `taskApi.js` and pass `companyId`; RequirementCoordination /
+  ClientDashboard / MyRequirements still use the AsyncStorage requirement service. Each holds
+  the list in local `useState`, loads on mount **and on `navigation.addListener('focus')`** (tab
+  screens stay mounted), and gates the first render with an `isDataLoaded` flag.
 - **Employee leave API (new 2026-11-15)** — `services/apiClient.js` (fetch wrapper +
   `API_BASE_URL`) and `services/leaveApi.js` (`fetchMyLeaves`, `submitLeaveRequest`).
   `MyLeaveRequestsScreen` uses these; the old `leaveService.js` (AsyncStorage `@wms_leaves`)
@@ -335,11 +334,13 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
 
 ## 10. Known Caveats / Tech Debt
 
-- No backend; the Redux theme flag resets on app reload (restored from `@wms_theme_preference` at boot; the
-  auth session, users, company profile, tasks/requirements/tickets/leaves/attendance/salary all persist in
-  AsyncStorage and survive reloads).
-- Plaintext passwords in AsyncStorage; Super Admin credentials hardcoded in `superAdminConfig.js` (fine for a course project).
-- Removing a Company Admin only removes them from AsyncStorage USERS (an already-open session of theirs would persist until logout).
+- The Redux theme flag and `@wms_theme_preference` persist, but the auth session is in-memory only -
+  reloading returns to Login. MySQL persists users/companies/tasks/logs/leaves/tickets/attendance/salary;
+  requirements and a few legacy manager/HR screens still use AsyncStorage.
+- Passwords are plaintext in MySQL; Super Admin credentials are hardcoded in `superAdminConfig.js` (fine
+  for a course project).
+- Deleting a Company Admin removes the MySQL `users` row, but an already-open session of theirs persists
+  until logout.
 - All image assets are 1x1-px placeholder stubs (blueprint lists required real images).
 - `@expo/vector-icons` installed but unused; some dashboard figures hardcoded rather than derived.
 - No TypeScript, no tests, no CI, no `.env`; Android only (no ios/).
@@ -378,9 +379,24 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
   `DELETE /api/super-admin/admins/:email` (create is transactional: `companies` + `ADMIN` user).
 - **Company Admin API:** `GET|PUT /api/admin/company/:companyId`, `GET /api/admin/users[/:companyId]`,
   `POST /api/admin/users`, `PUT /api/admin/users/:email`, `PATCH /api/admin/users/:email/status`.
-- **Mounted routes:** `src/app.js` mounts `/api/auth`, `/api/super-admin`, `/api/admin` alongside
-  the employee routes; `config/db.js` exports `{ pool, testConnection }` and all modules destructure
+- **Mounted routes:** `src/app.js` mounts `/api/auth`, `/api/super-admin`, `/api/admin`,
+  `/api/tasks`, `/api/users`, `/api/leaves`, `/api/tickets`, `/api/attendance`, `/api/salary`,
+  `/api/requirements`; `config/db.js` exports `{ pool, testConnection }` and all modules destructure
   `{ pool }`.
+- **Task API (Manager/Employee):**
+  - `GET /api/tasks?companyId=...&assignedToEmail=...` -> `{ tasks: [...] }` (newest first; includes
+    `priority`, `is_milestone_synced`, `created_at`, assignments and logs).
+  - `GET /api/tasks/:id` -> `{ task }`.
+  - `POST /api/tasks` body `{ createdByEmail, title, description, priority, internalDeadline,
+    clientDeadline, assignedToEmails }` -> 201 `{ task }`; validates creator/assignees against MySQL
+    `users`, inserts task + assignments + initial log.
+  - `PATCH /api/tasks/:id` (title/description/priority/deadlines/assignees + author note),
+    `PATCH /api/tasks/:id/status` (`status` / `progressPercent` / `note`),
+    `PATCH /api/tasks/:id/milestone-sync` (`isSynced`), `POST /api/tasks/:id/logs` (`note`).
+    Each returns the refreshed `{ task }` and writes `task_logs.author_name` / microsecond timestamp.
+  - Schema support: `tasks.priority`, `tasks.is_milestone_synced`, `tasks.created_at`,
+    `task_logs.author_name`, `task_logs.created_at DATETIME(6)`; existing DBs need
+    `src/schema/tasks_upgrade.sql`.
 - **Employee API (Request Leave):**
   - `GET /api/leaves?userEmail=...` → `{ data: [ { id, userEmail, startDate, endDate,
     reason, status, daysCount } ] }` (newest first).
@@ -429,6 +445,17 @@ The theme flag was moved out of the old `ThemeContext` into the `theme` slice (s
 ---
 
 ## Changelog (append every change/pull/merge on `Umar`)
+
+- **2026-11-18** - **Resolved the `Manager` merge `1e01742` (10 keep-both files) and moved tasks to the single MySQL database.**
+  - Restored Manager's canonical task router/client/`MyTasksScreen`, removed the duplicated bootstrap and
+    JSON fragments in `server.js` / `db.js` / `package.json` / `package-lock.json` / `.env.example`.
+  - `taskApi.js` now reads the company roster from `fetchCompanyUsersApi(companyId)`; every task call
+    takes `companyId` (no AsyncStorage users/session/task sync). ManagerDashboard/TaskManagement/
+    TaskDetail/MyTasks/EmployeeDashboard pass it; employee dashboard uses `loadMyTasks` + backend leaves.
+  - Applied live `tasks.priority` / `is_milestone_synced` / `created_at` and `task_logs.author_name`
+    migrations and updated `tasks_upgrade.sql`; `wms_schema.sql` already had the union schema.
+  - Verified: backend `node --check`, Babel parse on changed frontend files, live MySQL task
+    create/list/status/log/milestone-sync smoke test (temp task cleaned up), and no conflict markers.
 
 - **2026-11-15** — **Resolved the `Samer` → `merge_Umar_Samer_Manal` merge conflicts (server.js, config/db.js, opencodeContext.md).**
   - `server.js`: removed the duplicated second Express bootstrap carried over from `Samer`; kept the

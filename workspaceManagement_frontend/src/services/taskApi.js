@@ -1,24 +1,3 @@
-import request from './apiClient';
-
-export const fetchMyTasks = async (userEmail) => {
-  const payload = await request(`/tasks?userEmail=${encodeURIComponent(userEmail)}`);
-  return payload && Array.isArray(payload.data) ? payload.data : [];
-};
-
-export const updateTaskStatusApi = async ({ taskId, status, progressPercent, note, authorEmail }) => {
-  const payload = await request(`/tasks/${encodeURIComponent(taskId)}/status`, {
-    method: 'PUT',
-    body: { status, progressPercent, note, authorEmail },
-  });
-  return payload ? payload.data : null;
-};
-
-export const addTaskLogApi = async ({ taskId, note, authorEmail }) => {
-  const payload = await request(`/tasks/${encodeURIComponent(taskId)}/logs`, {
-    method: 'POST',
-    body: { note, authorEmail },
-  });
-  return payload ? payload.data : null;
 // ---------------------------------------------------------------------------
 // TASK API — the ONLY place the app talks to the task backend.
 //
@@ -43,16 +22,15 @@ export const addTaskLogApi = async ({ taskId, note, authorEmail }) => {
 //   - Task logs/priority ... MySQL columns `tasks.priority`,
 //                            `tasks.is_milestone_synced`, `tasks.created_at`
 //                            and the `task_logs` table
-//   - User accounts ........ still AsyncStorage `@wms_users`; this file mirrors
-//                            them to MySQL (POST /api/users/sync) so task
-//                            foreign keys work, then maps app IDs <-> emails.
-//   - Company scoping ...... the logged-in user's companyId from AsyncStorage.
+//   - User accounts ........ MySQL `users` (read with GET /api/admin/users?companyId=...)
+//                            and mapped to the app's email/id shape.
+//   - Company scoping ...... the logged-in user's companyId supplied by the screen.
 //
-// IMPORTANT: no task is read from or written to `@wms_tasks` anymore.
+// IMPORTANT: no task or user is read from or written to AsyncStorage here.
 // ---------------------------------------------------------------------------
 
 import { API_BASE_URL } from '../config/api';
-import storageService, { STORAGE_KEYS } from './storageService';
+import { fetchCompanyUsersApi } from './api';
 import { timeAgo } from '../utils/timeAgo';
 
 // ---------------------------------------------------------------------------
@@ -85,48 +63,13 @@ const request = async (path, options = {}) => {
   return data;
 };
 
-const loadStoredUsers = async () => {
-  const stored = await storageService.getItem(STORAGE_KEYS.USERS, []);
-  return Array.isArray(stored) ? stored : [];
-};
-
-const loadSessionCompanyId = async () => {
-  const session = await storageService.getItem(STORAGE_KEYS.AUTH_CURRENT_USER, null);
-  return session?.companyId || null;
-};
-
-// ---------------------------------------------------------------------------
-// Users mirror
-//
-// tasks.created_by_email and task_assignments.user_email are FOREIGN KEYs to
-// users(email), so the accounts that live in AsyncStorage must exist in MySQL
-// before a task can be written. We sync them once per app session, and force a
-// refresh before creating/editing a task (the Admin may have just added a user).
-// ---------------------------------------------------------------------------
-
-let usersSyncPromise = null;
-
-export const syncUsersFromStorage = async ({ force = false } = {}) => {
-  if (usersSyncPromise && !force) {
-    return usersSyncPromise;
+// users/companies live in MySQL now, so task screens pass the logged-in
+// company's id and we read the roster from the same backend.
+const loadCompanyUsers = async (companyId) => {
+  if (!companyId) {
+    throw new Error('A companyId is required to load task users.');
   }
-
-  usersSyncPromise = (async () => {
-    const users = await loadStoredUsers();
-    if (users.length === 0) return { synced: 0 };
-    return request('/users/sync', {
-      method: 'POST',
-      body: JSON.stringify({ users }),
-    });
-  })();
-
-  // A failed sync should be retried on the next call instead of being cached.
-  usersSyncPromise = usersSyncPromise.catch((err) => {
-    usersSyncPromise = null;
-    throw err;
-  });
-
-  return usersSyncPromise;
+  return fetchCompanyUsersApi(companyId);
 };
 
 // ---------------------------------------------------------------------------
@@ -245,25 +188,33 @@ const withCompanyFilter = (companyId) =>
 // Reads every task for the current company from MySQL (GET /api/tasks).
 // Never returns null — always an array.
 export const loadTasks = async (options = {}) => {
-  await syncUsersFromStorage();
-
-  const companyId = options.companyId || (await loadSessionCompanyId());
-  const data = await request(`/tasks${withCompanyFilter(companyId)}`);
-  const users = await loadStoredUsers();
+  const companyId = options.companyId;
+  const users = await loadCompanyUsers(companyId);
   const maps = buildUserMaps(users);
+  const data = await request(`/tasks${withCompanyFilter(companyId)}`);
 
   return (data?.tasks || []).map((task) => mapTaskFromApi(task, maps));
+};
+
+// Employee-facing helper: keeps only the tasks assigned to the signed-in user.
+export const loadMyTasks = async ({ userEmail, companyId } = {}) => {
+  const tasks = await loadTasks({ companyId });
+  const email = String(userEmail || '').toLowerCase();
+  if (!email) return [];
+
+  return tasks.filter(
+    (task) =>
+      (task.assignedToEmails || []).some((value) => String(value).toLowerCase() === email) ||
+      (task.assignedToIds || []).some((value) => String(value).toLowerCase() === email)
+  );
 };
 
 // ------------------------------- WRITE -------------------------------------
 // Manager creates a task for one or more engineers (POST /api/tasks).
 export const createTask = async (payload) => {
-  await syncUsersFromStorage({ force: true });
-
-  const users = await loadStoredUsers();
+  const companyId = payload.companyId;
+  const users = await loadCompanyUsers(companyId);
   const maps = buildUserMaps(users);
-
-  const companyId = payload.companyId || (await loadSessionCompanyId());
   const assignedToEmails = resolveAssigneeEmails(maps, payload);
 
   if (assignedToEmails.length === 0) {
@@ -295,11 +246,9 @@ export const createTask = async (payload) => {
 // Manager edits title / description / priority / deadlines / assignees
 // (PATCH /api/tasks/:id).
 export const editTask = async (payload) => {
-  await syncUsersFromStorage({ force: true });
-
-  const users = await loadStoredUsers();
+  const companyId = payload.companyId;
+  const users = await loadCompanyUsers(companyId);
   const maps = buildUserMaps(users);
-  const companyId = payload.companyId || (await loadSessionCompanyId());
 
   const body = {
     title: payload.title,
@@ -329,9 +278,9 @@ export const editTask = async (payload) => {
 // Manager marks / unmarks a task as ready for client milestone sync
 // (PATCH /api/tasks/:id/milestone-sync).
 export const toggleMilestoneSync = async (payload) => {
-  const users = await loadStoredUsers();
+  const companyId = payload.companyId;
+  const users = await loadCompanyUsers(companyId);
   const maps = buildUserMaps(users);
-  const companyId = payload.companyId || (await loadSessionCompanyId());
 
   await request(`/tasks/${encodeURIComponent(payload.taskId)}/milestone-sync`, {
     method: 'PATCH',
@@ -351,9 +300,9 @@ export const toggleMilestoneSync = async (payload) => {
 // Status / progress change — used by the manager AND by the employee's own
 // "save progress" action (PATCH /api/tasks/:id/status).
 export const updateTaskStatus = async (payload) => {
-  const users = await loadStoredUsers();
+  const companyId = payload.companyId;
+  const users = await loadCompanyUsers(companyId);
   const maps = buildUserMaps(users);
-  const companyId = payload.companyId || (await loadSessionCompanyId());
 
   await request(`/tasks/${encodeURIComponent(payload.taskId)}/status`, {
     method: 'PATCH',
@@ -374,9 +323,9 @@ export const updateTaskStatus = async (payload) => {
 
 // Posts a message on the shared task timeline (POST /api/tasks/:id/logs).
 export const addTaskLog = async (payload) => {
-  const users = await loadStoredUsers();
+  const companyId = payload.companyId;
+  const users = await loadCompanyUsers(companyId);
   const maps = buildUserMaps(users);
-  const companyId = payload.companyId || (await loadSessionCompanyId());
 
   await request(`/tasks/${encodeURIComponent(payload.taskId)}/logs`, {
     method: 'POST',
